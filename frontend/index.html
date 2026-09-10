@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AQ-TLC v1.0 | Advanced Quantitative Thin Layer Chromatography</title>
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;700&family=Roboto+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="index.css">
+  <style>
+    /* Streamlit component host adjustments */
+    html, body {
+      overflow: hidden;   /* Streamlit controls the scroll */
+      height: 100%;
+      margin: 0;
+      padding: 0;
+    }
+    .app-container {
+      height: 100vh;
+    }
+  </style>
+</head>
+<body class="dark-mode">
+  <div class="app-container">
+
+    <!-- Upload / Landing State -->
+    <div id="upload-prompt" class="landing-page">
+      <div class="landing-content">
+        <h1 class="hero-title">AQ-TLC <span class="version-tag">v1.0</span></h1>
+        <p style="text-align:center; font-size:0.82em; margin-top:-8px; margin-bottom:10px; color:rgba(255,255,255,0.45); letter-spacing:0.03em;">By <a href="mailto:g.pascali@unsw.edu.au" style="color:rgba(255,255,255,0.55); text-decoration:none; border-bottom:1px dotted rgba(255,255,255,0.35); transition:color 0.2s;" onmouseover="this.style.color='#ffc107'" onmouseout="this.style.color='rgba(255,255,255,0.55)'">Giancarlo Pascali</a></p>
+        <p class="hero-subtitle">High-precision densitometry &amp; quantitative chromatography analysis workstation.</p>
+        <p style="text-align:center; font-size: 0.9em; margin-bottom: 25px;"><a href="guide.html" target="_blank" style="color: #ffc107; text-decoration: none; border-bottom: 1px dotted #ffc107;">?? View Quick Guide</a></p>
+        <div class="upload-box" id="drop-zone">
+          <input type="file" id="file-input-prompter" accept="image/*" style="display:none">
+          <div class="upload-icon">??</div>
+          <div class="upload-text">Drop plate image or <span>Browse</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Workspace -->
+    <div id="app-grid" class="workspace" style="display:none">
+
+      <!-- Toolbar Sidebar -->
+      <aside class="sidebar">
+        <header class="sidebar-header">
+          <div class="app-logo">AQ-TLC <span class="v-small">v1.0</span></div>
+          <div style="font-size:0.6rem; color:rgba(255,255,255,0.35); text-align:center; margin-top:1px;">By <a href="mailto:g.pascali@unsw.edu.au" style="color:rgba(255,255,255,0.4); text-decoration:none;" onmouseover="this.style.color='#ffc107'" onmouseout="this.style.color='rgba(255,255,255,0.4)'">Giancarlo Pascali</a></div>
+          <div class="status-badge" id="lane-count-badge">0 Lanes</div>
+        </header>
+        <div style="text-align: center; padding: 6px; background: rgba(255,193,7,0.1); border-bottom: 1px solid rgba(255,255,255,0.05);">
+          <a href="guide.html" target="_blank" style="color: #ffc107; font-size: 0.75rem; text-decoration: none; font-weight: 600;">?? Quick Guide</a>
+        </div>
+
+        <div class="sidebar-scroll">
+          <div class="sidebar-section" style="padding:4px 10px; border-bottom:1px solid rgba(255,255,255,0.05)">
+            <div class="nav-grid" style="gap:4px">
+              <button class="nav-item secondary" id="btn-new" style="padding:4px; font-size:0.75rem">?? New</button>
+              <button class="nav-item secondary" id="btn-reset" style="padding:4px; font-size:0.75rem">?? Reset</button>
+            </div>
+          </div>
+
+          <div class="sidebar-section" id="wavelength-section" style="padding:4px 10px; border-bottom:1px solid rgba(255,255,255,0.05)">
+            <div class="sidebar-title" style="margin-bottom:4px; font-size:0.65rem; color:var(--text-dim); display:flex; justify-content:space-between; align-items:center;">
+              <span>WAVELENGTH FILTERING</span>
+              <button id="btn-invert-colors" class="mode-toggle-btn" style="font-size:0.58rem; padding:1px 5px; border-radius:3px; border:1px solid var(--border);" title="Invert image colors">?? Invert</button>
+            </div>
+
+            <div class="wl-preset-grid" style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 3px; margin-bottom: 6px;">
+              <button class="wl-preset-btn active" data-wl="full" id="wl-preset-full" style="font-size:0.6rem; padding:3px 2px;">Full RGB</button>
+              <button class="wl-preset-btn" data-wl="540" id="wl-preset-540" style="font-size:0.6rem; padding:3px 2px;">UV-254</button>
+              <button class="wl-preset-btn" data-wl="570" id="wl-preset-570" style="font-size:0.6rem; padding:3px 2px;">Ninhydrin</button>
+              <button class="wl-preset-btn" data-wl="450" id="wl-preset-450" style="font-size:0.6rem; padding:3px 2px;">Iodine</button>
+              <button class="wl-preset-btn" data-wl="650" id="wl-preset-650" style="font-size:0.6rem; padding:3px 2px;">PMA</button>
+              <button class="wl-preset-btn" data-wl="custom" id="wl-preset-custom" style="font-size:0.6rem; padding:3px 2px;">Custom ?</button>
+            </div>
+
+            <div id="wl-custom-controls" style="display:none; flex-direction:column; gap:4px; margin-top:4px;">
+              <div class="slider-header" style="font-size:0.65rem; display:flex; justify-content:space-between; align-items:center;">
+                <label style="color:var(--text-dim);">Target ?:</label>
+                <div style="display:flex; align-items:center; gap:4px;">
+                  <span id="wl-swatch" style="display:inline-block; width:10px; height:10px; border-radius:50%; background:#fff; border:1px solid #555;"></span>
+                  <input type="number" id="wl-num-input" min="380" max="750" value="540" style="width:45px; background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:3px; color:#fff; font-size:0.65rem; text-align:right; padding:1px 3px;">
+                  <span style="font-size:0.65rem; color:var(--text-dim);">nm</span>
+                </div>
+              </div>
+
+              <input type="range" id="wl-slider" min="380" max="750" value="540" class="rainbow-slider" style="height:10px; width:100%; cursor:pointer;">
+
+              <div class="slider-header" style="font-size:0.65rem; display:flex; justify-content:space-between; margin-top:2px;">
+                <label style="color:var(--text-dim);">Bandwidth:</label>
+                <span style="color:#fff; font-size:0.65rem;">±<span id="wl-bw-val">25</span> nm</span>
+              </div>
+              <input type="range" id="wl-bw-slider" min="5" max="50" value="25" style="height:10px; width:100%; cursor:pointer;">
+            </div>
+          </div>
+
+          <div class="sidebar-section" style="padding:4px 10px; border-bottom:1px solid rgba(255,255,255,0.05)">
+            <div class="sidebar-title" style="margin-bottom:4px; font-size:0.65rem; color:var(--text-dim)">TOOLS &amp; ACTIONS</div>
+            <div class="tool-grid" style="grid-template-columns: repeat(3, 1fr); gap: 2px;">
+              <button class="tool-btn small" data-tool="roi" title="Crop ROI" style="padding:2px">??</button>
+              <button class="tool-btn small" data-tool="pan" title="Pan" style="padding:2px">???</button>
+              <button class="tool-btn small" data-tool="rotate_img" title="Rotate" style="padding:2px">??</button>
+              <button class="tool-btn small" data-tool="select" title="Select" style="padding:2px">???</button>
+              <button class="tool-btn small" data-tool="line" title="Lines" style="padding:2px">??</button>
+              <button class="tool-btn small" data-tool="spotting" title="Marks" style="padding:2px">??</button>
+            </div>
+            <button class="action-btn primary small" id="btn-calc-lanes" style="margin-top:4px; font-size:0.7rem; padding:4px; width:100%">?? Find Lanes</button>
+
+            <div class="polarity-switch-wrap" style="margin-top:8px; display:flex; flex-direction:column; gap:4px">
+              <div class="sidebar-title" style="margin:0; font-size:0.6rem; color:var(--text-dim)">POLARITY MODE</div>
+              <div class="mode-toggle-group">
+                <button class="mode-toggle-btn active" data-mode="default" id="mode-default">Default</button>
+                <button class="mode-toggle-btn" data-mode="dark" id="mode-dark">Dark Spots</button>
+                <button class="mode-toggle-btn" data-mode="bright" id="mode-bright">Bright Spots</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="sidebar-section" id="peak-params-section" style="padding:4px 10px; border-bottom:1px solid rgba(255,255,255,0.05)">
+            <div class="sidebar-title" style="margin-bottom:4px; font-size:0.65rem; color:var(--text-dim)">PEAK INTEGRATION</div>
+            <div class="slider-row" style="margin-bottom:2px">
+              <div class="slider-header" style="font-size:0.7rem"><label>Sens.</label><span id="peak-prominence-val">40</span></div>
+              <input type="range" id="peak-prominence" min="1" max="80" value="40" style="height:12px">
+            </div>
+            <div class="slider-row" style="margin-bottom:2px">
+              <div class="slider-header" style="font-size:0.7rem"><label>Res.</label><span id="peak-distance-val">8</span></div>
+              <input type="range" id="peak-distance" min="1" max="100" value="8" style="height:12px">
+            </div>
+            <div class="slider-row">
+              <div class="slider-header" style="font-size:0.7rem"><label>Width %</label><span id="peak-threshold-val">50</span></div>
+              <input type="range" id="peak-threshold" min="5" max="95" value="50" style="height:12px">
+            </div>
+            <button class="action-btn secondary small" id="btn-restore-defaults" style="margin-top:8px; font-size:0.65rem; padding:2px; width:100%">Restore Defaults</button>
+          </div>
+
+
+        </div>
+      </aside>
+
+      <!-- Viewer Container -->
+      <main class="viewer-main">
+        <canvas id="canvas-main"></canvas>
+      </main>
+
+      <!-- Analysis Sidebar -->
+      <aside class="analysis-panel">
+        <div id="densitogram-list">
+          <!-- Populated by JS -->
+        </div>
+      </aside>
+
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
