@@ -1,47 +1,47 @@
 """
 streamlit_app.py
 ================
-AQ-TLC v1.0 — Streamlit Cloud entry point.
+AQ-TLC v1.0 -- Streamlit Cloud entry point.
 
 Architecture
 ------------
-The entire HTML/CSS/JS canvas UI runs inside a Streamlit custom component
-(an iframe served from the ./frontend/ directory).
+The HTML/CSS/JS canvas UI runs inside a Streamlit custom component (an iframe
+served from ./frontend/).
 
 Communication flow:
-  1. User performs an action in the JS frontend (e.g. Find Lanes).
-  2. JS calls stSend({action, payload, request_id}) via streamlit_bridge.js.
-  3. Streamlit reruns this script; `component_value` contains the request.
-  4. Python computes the result (generate_profiles or crop_image).
-  5. Python re-renders the component, passing `response=` as args.
-  6. JS receives args via the streamlit:render event and updates the UI.
+  1. JS sends stSend({action, payload, request_id}) via streamlit_bridge.js.
+  2. Streamlit reruns; `component_value` holds the request.
+  3. Python computes the result and re-renders with `response=` args.
+  4. JS receives args via the global render callback buffer and updates UI.
 
-Session state keys
-------------------
-  pending_response : dict | None  — response to send to the component next render
-  last_req_id      : str          — stringified last processed request_id (dedup)
+The "streamlit:componentReady" message is sent IMMEDIATELY by an inline
+<script> in frontend/index.html -- before any ES module loads -- so the
+60-second component-timeout is never reached.
 """
 
+import os
+import sys
 import streamlit as st
 import streamlit.components.v1 as components
-import os
 
 import tlc_backend
 
-# -- Page configuration --------------------------------------------------------
-
+# ---------------------------------------------------------------------------
+# Page config
+# ---------------------------------------------------------------------------
 st.set_page_config(
     page_title="AQ-TLC v1.0",
-    page_icon="??",
+    page_icon="&#128300;",
     layout="wide",
     initial_sidebar_state="collapsed",
     menu_items={
-        "Get Help": "https://github.com/giancarlopascali-hub/AQ-TLC-streamlit",
-        "About": "AQ-TLC v1.0 — Advanced Quantitative TLC Analysis\nBy Giancarlo Pascali",
+        "About": "AQ-TLC v1.0 -- Advanced Quantitative TLC Analysis\nBy Giancarlo Pascali",
     },
 )
 
-# -- Hide Streamlit chrome -----------------------------------------------------
+# ---------------------------------------------------------------------------
+# Hide Streamlit chrome so the component fills the full viewport
+# ---------------------------------------------------------------------------
 st.markdown(
     """
     <style>
@@ -49,47 +49,57 @@ st.markdown(
         footer     { visibility: hidden; }
         header     { visibility: hidden; }
         section[data-testid="stSidebar"] { display: none; }
-        .block-container {
-            padding: 0 !important;
-            max-width: 100% !important;
-        }
+        .block-container { padding: 0 !important; max-width: 100% !important; }
+        iframe[title="aq_tlc.aq_tlc"] { border: none; }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-# -- Declare the custom component ----------------------------------------------
+# ---------------------------------------------------------------------------
+# Declare custom component
+# ---------------------------------------------------------------------------
+_FRONTEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend")
 
-_FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "frontend")
+if not os.path.isdir(_FRONTEND_DIR):
+    st.error(
+        f"Component frontend directory not found: {_FRONTEND_DIR}\n\n"
+        "Make sure the `frontend/` folder exists in the repository root."
+    )
+    st.stop()
+
 _component_func = components.declare_component("aq_tlc", path=_FRONTEND_DIR)
 
-# -- Session state initialisation ----------------------------------------------
-
+# ---------------------------------------------------------------------------
+# Session state
+# ---------------------------------------------------------------------------
 if "pending_response" not in st.session_state:
     st.session_state.pending_response = None
 if "last_req_id" not in st.session_state:
     st.session_state.last_req_id = None
 
-# -- Render the component ------------------------------------------------------
-
-# Pass any pending response back to JS as component args.
-# The component fills the full viewport height (Streamlit will honour the
-# stSetHeight() calls from the JS side to keep the iframe sized correctly).
+# ---------------------------------------------------------------------------
+# Render the component
+# ---------------------------------------------------------------------------
+# Height: fill the viewport. Streamlit Cloud viewport is typically ~900px.
+# The component's inline script calls stSetHeight(window.innerHeight) on load,
+# but we pass a generous default here so the iframe is never clipped.
 component_value = _component_func(
     response=st.session_state.pending_response,
     key="aq_tlc_main",
     default=None,
+    height=900,
 )
 
-# -- Process incoming requests from JS ----------------------------------------
-
+# ---------------------------------------------------------------------------
+# Process requests from JS
+# ---------------------------------------------------------------------------
 if component_value is not None:
-    action     = component_value.get("action")
-    req_id     = str(component_value.get("request_id", ""))
-    payload    = component_value.get("payload", {})
+    action  = component_value.get("action")
+    req_id  = str(component_value.get("request_id", ""))
+    payload = component_value.get("payload", {})
 
-    # Only process each request once (Streamlit reruns can deliver the same
-    # component value more than once if no new stSend has been called).
+    # Deduplicate: only process each request_id once
     if req_id and req_id != st.session_state.last_req_id:
         st.session_state.last_req_id = req_id
 
@@ -108,14 +118,10 @@ if component_value is not None:
             }
 
         else:
-            # Unknown action — clear any stale response
             st.session_state.pending_response = None
 
-        # Rerun so the component re-renders with the new response in its args.
         st.rerun()
 
     else:
-        # No new request — clear any pending response so it isn't re-applied
-        # on subsequent natural reruns (e.g. from Streamlit's own polling).
-        if component_value.get("action") != st.session_state.last_req_id:
-            st.session_state.pending_response = None
+        # No new request -- clear stale response so it is not replayed
+        st.session_state.pending_response = None
