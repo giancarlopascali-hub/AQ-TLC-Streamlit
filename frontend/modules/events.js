@@ -210,13 +210,66 @@ export function setupCanvasEvents() {
 /**
  * Calculates lane bounding boxes from Origin/Front boundary lines and spotting marks.
  */
+/**
+ * Displays a user notification toast.
+ * @param {string} message
+ * @param {number} [duration=6000]
+ */
+export function showToast(message, duration = 6000) {
+  let toast = $('app-toast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'app-toast';
+    toast.style.cssText = [
+      'position: fixed',
+      'top: 60px',
+      'left: 50%',
+      'transform: translateX(-50%)',
+      'background: rgba(22, 27, 34, 0.95)',
+      'color: #fff',
+      'border: 1px solid #ffc107',
+      'border-radius: 8px',
+      'padding: 12px 22px',
+      'font-size: 0.85rem',
+      'line-height: 1.5',
+      'z-index: 999999',
+      'box-shadow: 0 6px 20px rgba(0,0,0,0.6)',
+      'max-width: 480px',
+      'text-align: center',
+      'white-space: pre-line',
+      'pointer-events: auto',
+      'cursor: pointer',
+      'transition: opacity 0.3s, transform 0.3s',
+    ].join(';');
+    toast.onclick = () => { toast.style.opacity = '0'; };
+    document.body.appendChild(toast);
+  }
+  toast.textContent = message;
+  toast.style.opacity = '1';
+  toast.style.transform = 'translateX(-50%) translateY(0)';
+  clearTimeout(toast._timer);
+  toast._timer = setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateX(-50%) translateY(-10px)';
+  }, duration);
+}
+
+/**
+ * Calculates lane bounding boxes from Origin/Front boundary lines and spotting marks.
+ */
 export function calculateLanes() {
+  const canvas = $('canvas-main');
+  if (!canvas || !state.imgEl) return;
+
+  if (state.lines.length < 2) {
+    showToast('To calculate lanes, first draw 2 horizontal boundary lines across the plate (Origin and Solvent Front) using the "Lines" tool.');
+    return;
+  }
+
   saveState();
   state.lanes = [];
   const pool = [...state.lines];
   const pairs = [];
-  const canvas = $('canvas-main');
-  if (!canvas) return;
 
   const sx = canvas.width / state.imgW;
 
@@ -239,6 +292,16 @@ export function calculateLanes() {
       const [f, o] = l1_pos.cy < l2_pos.cy ? [l1, l2] : [l2, l1];
       pairs.push({ o, f, id: pairs.length + 1, w: Math.max(o.w, f.w) });
     }
+  }
+
+  if (pairs.length === 0) {
+    showToast('Boundary lines could not be paired. Please ensure the Origin line and Solvent Front line are separated vertically.');
+    return;
+  }
+
+  if (state.spottingMarks.length === 0) {
+    showToast('Boundary lines detected! Now use the "Marks" tool to click and place Spotting Marks along the Origin line for each sample lane.');
+    return;
   }
 
   state.spottingMarks.forEach(m => {
@@ -305,6 +368,7 @@ export function calculateLanes() {
 
   if (state.lanes.length > 0) {
     state.activeLane = state.lanes[0];
+    renderProfiles();
     updateDensitograms(true);
   }
   render();

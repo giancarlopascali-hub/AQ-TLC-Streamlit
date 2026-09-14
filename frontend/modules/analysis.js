@@ -6,32 +6,32 @@
  *
  * All functions are stateless mathematical transforms except where they read
  * `state.lanes` to gather calibration standards.  None of these functions
- * trigger DOM mutations, canvas redraws, or network requests â€” they only
+ * trigger DOM mutations, canvas redraws, or network requests - they only
  * compute and return values.
  */
 
 import { state }                              from './state.js';
 import { RF_ORIGIN_OFFSET, RF_FRONT_OFFSET } from './constants.js';
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//                                                                             
 //  Rf CALCULATION
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//                                                                             
 
 /**
  * Calculates the Retention Factor (Rf) for a peak at a given profile index.
  *
  * Background:
  *   The server returns the 1D density profile with index 0 = Origin end of the
- *   lane, index nâˆ’1 = Front end.  Before use in the chart, the array is reversed
- *   so that index 0 = Front (Rfâ‰ˆ1) and index nâˆ’1 = Origin (Rfâ‰ˆ0).
+ *   lane, index n 1 = Front end.  Before use in the chart, the array is reversed
+ *   so that index 0 = Front (Rf~1) and index n 1 = Origin (Rf~0).
  *
- *   The lane bounding box is 1.10Ã— the solvent travel distance.  The real
+ *   The lane bounding box is 1.10  the solvent travel distance.  The real
  *   chromatographic region occupies the middle 1.00/1.10 of the box, bounded by
  *   RF_ORIGIN_OFFSET at the bottom and RF_FRONT_OFFSET at the top.
  *
  * Formula:
- *   y_fract  = 1 âˆ’ (idx / (nâˆ’1))   â†’ fractional position in box (0=Origin end, 1=Front end)
- *   Rf       = (RF_ORIGIN_OFFSET âˆ’ y_fract) / (RF_ORIGIN_OFFSET âˆ’ RF_FRONT_OFFSET)
+ *   y_fract  = 1   (idx / (n 1))   -> fractional position in box (0=Origin end, 1=Front end)
+ *   Rf       = (RF_ORIGIN_OFFSET   y_fract) / (RF_ORIGIN_OFFSET   RF_FRONT_OFFSET)
  *
  * This mapping must stay in sync with the identical formula in server.py
  * (generate_profiles function).
@@ -45,9 +45,9 @@ export function calculateRf(idx, n) {
   return (RF_ORIGIN_OFFSET - y_fract) / (RF_ORIGIN_OFFSET - RF_FRONT_OFFSET);
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//                                                                             
 //  AREA CALIBRATION CURVE
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//                                                                             
 
 /**
  * Builds a calibration function that converts integrated peak area (AU) to
@@ -57,9 +57,9 @@ export function calculateRf(idx, n) {
  * ALL lanes in the current image, providing a global calibration model.
  *
  * Algorithm selection:
- *   0 standards â†’ returns null (no calibration possible).
- *   1 standard  â†’ linear-through-origin: y = (S.value / S.area) Ã— area.
- *   2+ standards â†’ ordinary least squares regression: y = mÂ·area + b.
+ *   0 standards -> returns null (no calibration possible).
+ *   1 standard  -> linear-through-origin: y = (S.value / S.area)   area.
+ *   2+ standards -> ordinary least squares regression: y = m area + b.
  *                  Guards against the degenerate case where all standards have
  *                  the same area (returns a constant function).
  *
@@ -99,16 +99,16 @@ export function calculateCalibrationCurve() {
   const m = denominator !== 0 ? (n * sumXY - sumX * sumY) / denominator : NaN;
   const b = (sumY - m * sumX) / n;
 
-  // Degenerate case: all standards have identical area â†’ constant output
+  // Degenerate case: all standards have identical area -> constant output
   if (isNaN(m)) return () => standards[0].value;
 
   // Clamp output at 0 to prevent negative calibrated values from extrapolation
   return area => Math.max(0, m * area + b);
 }
 
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//                                                                             
 //  MOLECULAR WEIGHT CALIBRATION CURVE (log-linear piecewise)
-// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//                                                                             
 
 /**
  * Builds a Molecular Weight estimation function from Standard peaks.
@@ -124,7 +124,7 @@ export function calculateCalibrationCurve() {
  * Minimum 2 Type-S standards with valid mwValue entries are required.
  *
  * @returns {((rf: number) => number) | null}
- *   A function mapping Rf â†’ estimated MW, or null if < 2 standards are defined.
+ *   A function mapping Rf -> estimated MW, or null if < 2 standards are defined.
  */
 export function calculateMWCalibrationCurve() {
   // Collect all Type-S peaks with a positive mwValue
@@ -144,14 +144,14 @@ export function calculateMWCalibrationCurve() {
   standards.sort((a, b) => a.x - b.x);
 
   return rf => {
-    // â”€â”€ Extrapolate below lowest standard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // -- Extrapolate below lowest standard ----------------------------------
     if (rf <= standards[0].x) {
       const s0 = standards[0], s1 = standards[1];
       const slope = (s1.y - s0.y) / (s1.x - s0.x);
       return Math.pow(10, s0.y + slope * (rf - s0.x));
     }
 
-    // â”€â”€ Extrapolate above highest standard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // -- Extrapolate above highest standard ---------------------------------
     const last = standards[standards.length - 1];
     if (rf >= last.x) {
       const sN1 = standards[standards.length - 2];
@@ -159,7 +159,7 @@ export function calculateMWCalibrationCurve() {
       return Math.pow(10, last.y + slope * (rf - last.x));
     }
 
-    // â”€â”€ Interpolate within range â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // -- Interpolate within range -------------------------------------------
     for (let i = 0; i < standards.length - 1; i++) {
       if (rf >= standards[i].x && rf <= standards[i + 1].x) {
         const s0    = standards[i];

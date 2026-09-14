@@ -59,7 +59,13 @@ export function registerApiCallbacks(renderProfilesFn, renderFn) {
 // -- Internal response handler -------------------------------------------------
 
 function _handleProfilesResponse(data) {
-  if (!data || !data.results) return;
+  if (!data || !data.results) {
+    if (data && data.error) {
+      console.error('[AQ-TLC Backend Error]:', data.error);
+      alert('Densitogram calculation error: ' + data.error);
+    }
+    return;
+  }
 
   data.results.forEach(result => {
     const lane = state.lanes.find(ln => ln.id === result.id);

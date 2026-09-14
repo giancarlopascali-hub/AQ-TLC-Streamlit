@@ -4,25 +4,25 @@
  *
  * Coordinate transformation utilities for AQ-TLC.
  *
- * â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+ * ----------------------------------------------------------------------
  * THREE COORDINATE SPACES
- * â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
- * 1. Screen space   â€” raw (clientX, clientY) from browser mouse events.
+ * ----------------------------------------------------------------------
+ * 1. Screen space   - raw (clientX, clientY) from browser mouse events.
  *                     Units: CSS pixels, origin at viewport top-left.
- * 2. Canvas space   â€” pixel coordinates of the <canvas> drawing buffer.
+ * 2. Canvas space   - pixel coordinates of the <canvas> drawing buffer.
  *                     May differ from screen space if devicePixelRatio != 1.
- * 3. Image space    â€” pixel coordinates within the loaded image (imgW Ã— imgH).
+ * 3. Image space    - pixel coordinates within the loaded image (imgW   imgH).
  *                     This is the "canonical" annotation coordinate system.
  *
  * Transforms applied at draw time (render.js):
- *   ctx.translate(view.dx, view.dy)    â€” pan
- *   ctx.scale(view.zoom, view.zoom)    â€” zoom
- *   ctx.translate(cx, cy)             â€” move to image centre
- *   ctx.rotate(imageRotation)         â€” rotation
- *   ctx.translate(-cx, -cy)           â€” move back from centre
+ *   ctx.translate(view.dx, view.dy)    - pan
+ *   ctx.scale(view.zoom, view.zoom)    - zoom
+ *   ctx.translate(cx, cy)             - move to image centre
+ *   ctx.rotate(imageRotation)         - rotation
+ *   ctx.translate(-cx, -cy)           - move back from centre
  *
- * getPos()             : Screen â†’ Image  (inverse of draw transform)
- * getImageCanvasPos()  : Image â†’ Canvas  (forward draw transform, no pan/zoom)
+ * getPos()             : Screen -> Image  (inverse of draw transform)
+ * getImageCanvasPos()  : Image -> Canvas  (forward draw transform, no pan/zoom)
  */
 
 import { state }             from './state.js';
@@ -51,7 +51,7 @@ import { SNAP_THRESHOLD_PX } from './constants.js';
 export function getPos(e, canvas) {
   const rect = canvas.getBoundingClientRect();
 
-  // 1. Map CSS pixels â†’ canvas buffer pixels
+  // 1. Map CSS pixels -> canvas buffer pixels
   const scX = (e.clientX - rect.left) * (canvas.width  / rect.width);
   const scY = (e.clientY - rect.top)  * (canvas.height / rect.height);
 
@@ -68,7 +68,7 @@ export function getPos(e, canvas) {
   const icx = (state.imgW * sx) / 2;
   const icy = (state.imgH * sx) / 2;
 
-  // 3. Rotate the vector (x âˆ’ centre, y âˆ’ centre) by âˆ’imageRotation
+  // 3. Rotate the vector (x   centre, y   centre) by  imageRotation
   //    to undo the drawing rotation
   const dx = x - icx;
   const dy = y - icy;
@@ -91,8 +91,8 @@ export function getPos(e, canvas) {
 /**
  * Converts an image-space point to un-zoomed canvas pixel coordinates.
  *
- * This mirrors the drawing transform in render.js (scale â†’ centre â†’ rotate â†’ decentre),
- * but without the pan/zoom wrapper â€” useful for hit-testing annotation positions
+ * This mirrors the drawing transform in render.js (scale -> centre -> rotate -> decentre),
+ * but without the pan/zoom wrapper - useful for hit-testing annotation positions
  * against raw canvas geometry.
  *
  * @param {number} x   - Image-space X (pixels).
@@ -129,7 +129,7 @@ export function getImageCanvasPos(x, y, sx, sy) {
  * the onmousedown and onmousemove handlers.
  *
  * @param {{ x: number, y: number, cx: number, cy: number }} p
- *   Position object from getPos() â€” contains both image-space (x, y) and
+ *   Position object from getPos() - contains both image-space (x, y) and
  *   canvas-space (cx, cy) coordinates.
  * @param {HTMLCanvasElement} canvas - The main canvas element.
  * @returns {{ x: number, y: number }} - Final image-space position (possibly snapped).
@@ -137,7 +137,7 @@ export function getImageCanvasPos(x, y, sx, sy) {
 export function calculateSnappedOriginPosition(p, canvas) {
   const sx = canvas.width / state.imgW;
 
-  // â”€â”€ Find all Origin lines â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Find all Origin lines -------------------------------------------------
   // Origin lines sit in the lower half of the canvas (higher canvas-Y value).
   const origins = state.lines.filter(l => {
     const pos = getImageCanvasPos(l.cx, l.cy, sx, sx);
@@ -146,7 +146,7 @@ export function calculateSnappedOriginPosition(p, canvas) {
 
   if (origins.length === 0) return { x: p.x, y: p.y };
 
-  // â”€â”€ Find the nearest Origin line by Euclidean distance in image space â”€â”€â”€â”€
+  // -- Find the nearest Origin line by Euclidean distance in image space ----
   const closest = origins.reduce((best, curr) => {
     const dCurr = Math.hypot(p.x - curr.cx, p.y - curr.cy);
     const dBest = Math.hypot(p.x - best.cx, p.y - best.cy);
@@ -155,7 +155,7 @@ export function calculateSnappedOriginPosition(p, canvas) {
 
   const oPos = getImageCanvasPos(closest.cx, closest.cy, sx, sx);
 
-  // â”€â”€ Snap if within vertical proximity threshold â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Snap if within vertical proximity threshold ---------------------------
   if (Math.abs(p.cy - oPos.cy) < SNAP_THRESHOLD_PX * sx) {
     // Project the cursor's X onto the Origin line's Y, then convert back to image space.
     const icx = (state.imgW * sx) / 2;
@@ -167,6 +167,6 @@ export function calculateSnappedOriginPosition(p, canvas) {
     return { x: (rx + icx) / sx, y: (ry + icy) / sx };
   }
 
-  // Outside snap threshold â€” return the raw position
+  // Outside snap threshold - return the raw position
   return { x: p.x, y: p.y };
 }

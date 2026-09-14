@@ -7,7 +7,7 @@
  * ALL modules import `state` from here to read and write application data.
  * Because `state` is exported as a plain object reference, any module that
  * mutates a property (e.g. `state.lanes.push(...)`) is immediately visible
- * to every other module â€” no pub/sub or store boilerplate required.
+ * to every other module - no pub/sub or store boilerplate required.
  *
  * IMPORTANT: Never reassign `state` itself (e.g. `state = {...}`).
  * Only mutate its properties. This preserves the live-binding across modules.
@@ -19,7 +19,7 @@
  * @typedef {Object} AppState
  */
 export const state = {
-  // â”€â”€ Image â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Image --------------------------------------------------------------
   /** @type {HTMLImageElement|null} Currently loaded image element. */
   imgEl:          null,
 
@@ -38,7 +38,7 @@ export const state = {
   /** @type {number} Current image rotation in radians (applied at draw time). */
   imageRotation:  0,
 
-  // â”€â”€ Annotations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Annotations --------------------------------------------------------
   /** @type {Array<{cx:number, cy:number, w:number, angle:number}>} Boundary lines (Origin / Front). */
   lines:          [],
 
@@ -52,7 +52,7 @@ export const state = {
    */
   lanes:          [],
 
-  // â”€â”€ Active selections â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Active selections --------------------------------------------------
   /**
    * Currently active tool identifier.
    * One of: 'pan' | 'select' | 'line' | 'spotting' | 'roi' | 'rotate_img'
@@ -69,11 +69,11 @@ export const state = {
   /** @type {Object|null} Currently selected spotting mark object. */
   activeMark:     null,
 
-  // â”€â”€ Canvas view transform â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Canvas view transform ----------------------------------------------
   /** @type {{zoom:number, dx:number, dy:number}} Pan and zoom state. */
   view:           { zoom: 1, dx: 0, dy: 0 },
 
-  // â”€â”€ Drag / interaction transient state â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Drag / interaction transient state --------------------------------
   /** @type {Object|null} Canvas position where the current drag started. */
   dragStart:      null,
 
@@ -120,7 +120,7 @@ export const state = {
    */
   editingField:    null,
 
-  // â”€â”€ Analysis â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Analysis -----------------------------------------------------------
   /**
    * Active integration modality for the analysis panel.
    * One of: 'relative' | 'calibration' | 'mw_calibration'
@@ -128,7 +128,7 @@ export const state = {
    */
   integrationMethod: 'relative',
 
-  // â”€â”€ Undo â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Undo ---------------------------------------------------------------
   /**
    * Stack of serialised state snapshots for undo (Ctrl+Z).
    * Capped at UNDO_STACK_LIMIT entries; oldest entries are discarded first.
@@ -136,7 +136,7 @@ export const state = {
    */
   undoStack:       [],
 
-  // â”€â”€ Chart â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Chart --------------------------------------------------------------
   /**
    * Horizontal zoom and pan state for the densitogram chart canvas.
    * zoom: 1 = full view, >1 = zoomed in. offset shifts the visible window.
@@ -144,17 +144,17 @@ export const state = {
    */
   chartView:       { zoom: 1, offset: 0 },
 
-  // â”€â”€ Polarity â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Polarity -----------------------------------------------------------
   /**
    * Signal polarity mode for density profile extraction.
-   * 'default'  â€” auto-detect based on mean vs median heuristic.
-   * 'dark'     â€” force dark-spot mode (UV quenching): inverts signal.
-   * 'bright'   â€” force bright-spot mode (fluorescence): uses signal as-is.
+   * 'default'  - auto-detect based on mean vs median heuristic.
+   * 'dark'     - force dark-spot mode (UV quenching): inverts signal.
+   * 'bright'   - force bright-spot mode (fluorescence): uses signal as-is.
    * @type {string}
    */
   polarityMode:    'default',
 
-  // â”€â”€ Wavelength Filter â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // -- Wavelength Filter ---------------------------------------------------
   /**
    * Target wavelength for spectral filtering (in nm, 380..750).
    * null or 'full' indicates full-spectrum RGB grayscale conversion.

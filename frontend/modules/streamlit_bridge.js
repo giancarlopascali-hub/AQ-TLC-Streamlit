@@ -30,7 +30,7 @@ export function stReady() {
  * @param {any} value - JSON-serialisable payload.
  */
 export function stSend(value) {
-  _post({ type: 'streamlit:componentChanged', value, dataUrls: [] });
+  _post({ type: 'streamlit:setComponentValue', value: value });
 }
 
 /**
