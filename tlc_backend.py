@@ -1,7 +1,7 @@
 """
 tlc_backend.py
 ==============
-Pure Python computation for AQ-TLC — no Flask dependency.
+Pure Python computation for AQ-TLC â€” no Flask dependency.
 
 All functions take a plain dict (matching the JSON payloads from the
 original Flask endpoints) and return a plain dict.  This module is shared
@@ -10,8 +10,8 @@ by any other runner without bringing in Flask.
 
 Functions
 ---------
-generate_profiles(data)   — density profiles + peak detection
-crop_image(data)          — ROI crop with rotation correction
+generate_profiles(data)   â€” density profiles + peak detection
+crop_image(data)          â€” ROI crop with rotation correction
 """
 
 from __future__ import annotations
@@ -49,7 +49,7 @@ def load_image(b64str: str) -> np.ndarray:
 
 
 def wavelength_to_rgb(wavelength: float):
-    """Convert wavelength (nm, 380–750) to RGB tuple in [0, 1]."""
+    """Convert wavelength (nm, 380â€“750) to RGB tuple in [0, 1]."""
     if 380 <= wavelength < 440:
         r = -(wavelength - 440) / (440 - 380); g = 0.0; b = 1.0
     elif 440 <= wavelength < 490:
@@ -170,7 +170,7 @@ def generate_profiles(data: dict) -> dict:
 
     Parameters
     ----------
-    data : dict  — mirrors the JSON body of POST /generate_profiles
+    data : dict  â€” mirrors the JSON body of POST /generate_profiles
 
     Returns
     -------

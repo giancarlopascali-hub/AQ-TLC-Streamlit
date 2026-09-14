@@ -4,44 +4,44 @@
  *
  * Shared geometry and configuration constants for AQ-TLC.
  *
- * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- * Rf COORDINATE SYSTEM — READ THIS BEFORE EDITING
- * ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ * â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
+ * Rf COORDINATE SYSTEM â€” READ THIS BEFORE EDITING
+ * â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”
  * The lane bounding box is intentionally drawn 10% LARGER than the physical
  * Origin-to-Front distance, providing 5% padding above the Front line and
- * 5% padding below the Origin line.  Within this box (total height = 1.10×):
+ * 5% padding below the Origin line.  Within this box (total height = 1.10Ã—):
  *
- *   ┌─────────────────┐  ← top of box (Front side)
- *   │  5% pad         │  (0.05 / 1.10 from top)
- *   ├─────────────────┤  ← FRONT line  (Rf = 1.0)
- *   │                 │
- *   │   active Rf     │  (spans 1.00 / 1.10 of box)
- *   │   region        │
- *   ├─────────────────┤  ← ORIGIN line (Rf = 0.0)
- *   │  5% pad         │  (0.05 / 1.10 from bottom)
- *   └─────────────────┘  ← bottom of box (Origin side)
+ *   â”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”  â† top of box (Front side)
+ *   â”‚  5% pad         â”‚  (0.05 / 1.10 from top)
+ *   â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤  â† FRONT line  (Rf = 1.0)
+ *   â”‚                 â”‚
+ *   â”‚   active Rf     â”‚  (spans 1.00 / 1.10 of box)
+ *   â”‚   region        â”‚
+ *   â”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤  â† ORIGIN line (Rf = 0.0)
+ *   â”‚  5% pad         â”‚  (0.05 / 1.10 from bottom)
+ *   â””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜  â† bottom of box (Origin side)
  *
- * RF_ORIGIN_OFFSET = 1.05 / 1.10  ≈ 0.9545  (fractional Y of Origin in box)
- * RF_FRONT_OFFSET  = 0.05 / 1.10  ≈ 0.0455  (fractional Y of Front in box)
+ * RF_ORIGIN_OFFSET = 1.05 / 1.10  â‰ˆ 0.9545  (fractional Y of Origin in box)
+ * RF_FRONT_OFFSET  = 0.05 / 1.10  â‰ˆ 0.0455  (fractional Y of Front in box)
  *
  * These values MUST stay identical to the y_origin_line / y_front_line
  * constants used in generate_profiles() in server.py.
  */
 
-// ── Rf geometry ──────────────────────────────────────────────────────────────
+// â”€â”€ Rf geometry â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /** Fractional position of the Origin line (Rf=0) within the lane bounding box. */
-export const RF_ORIGIN_OFFSET = 1.05 / 1.10;   // ≈ 0.9545
+export const RF_ORIGIN_OFFSET = 1.05 / 1.10;   // â‰ˆ 0.9545
 
 /** Fractional position of the Front line (Rf=1) within the lane bounding box. */
-export const RF_FRONT_OFFSET  = 0.05 / 1.10;   // ≈ 0.0455
+export const RF_FRONT_OFFSET  = 0.05 / 1.10;   // â‰ˆ 0.0455
 
-/** Total calibrated Rf span (Origin → Front) within the box. */
-export const RF_SPAN = RF_ORIGIN_OFFSET - RF_FRONT_OFFSET; // ≈ 0.9090
+/** Total calibrated Rf span (Origin â†’ Front) within the box. */
+export const RF_SPAN = RF_ORIGIN_OFFSET - RF_FRONT_OFFSET; // â‰ˆ 0.9090
 
-// ── Peak detection slider defaults ───────────────────────────────────────────
+// â”€â”€ Peak detection slider defaults â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-/** Default Sensitivity (prominence) slider value (1–80 scale). */
+/** Default Sensitivity (prominence) slider value (1â€“80 scale). */
 export const DEFAULT_PEAK_PROMINENCE = 40;
 
 /** Default Resolution (min-distance) slider value. */
@@ -50,12 +50,12 @@ export const DEFAULT_PEAK_DISTANCE = 8;
 /** Default Width-% (integration half-width threshold) slider value. */
 export const DEFAULT_PEAK_THRESHOLD = 50;
 
-// ── Undo stack ────────────────────────────────────────────────────────────────
+// â”€â”€ Undo stack â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /** Maximum number of snapshots held in the undo stack before FIFO eviction. */
 export const UNDO_STACK_LIMIT = 50;
 
-// ── Server communication ──────────────────────────────────────────────────────
+// â”€â”€ Server communication â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Gaussian smoothing sigma applied server-side to the raw density profile.
@@ -64,7 +64,7 @@ export const UNDO_STACK_LIMIT = 50;
  */
 export const SMOOTH_SIGMA = 1.5;
 
-// ── Canvas interaction ────────────────────────────────────────────────────────
+// â”€â”€ Canvas interaction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /**
  * Maximum vertical distance in scaled canvas pixels within which a spotting

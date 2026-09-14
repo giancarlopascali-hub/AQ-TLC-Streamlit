@@ -1,0 +1,10 @@
+# Ensure consistent line endings and encoding for all text files
+* text=auto eol=lf
+*.py text eol=lf encoding=utf-8
+*.js text eol=lf encoding=utf-8
+*.html text eol=lf encoding=utf-8
+*.css text eol=lf encoding=utf-8
+*.md text eol=lf encoding=utf-8
+*.txt text eol=lf encoding=utf-8
+*.toml text eol=lf encoding=utf-8
+*.ico binary

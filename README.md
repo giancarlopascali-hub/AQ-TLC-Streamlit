@@ -1,4 +1,4 @@
-# AQ-TLC v1.0 — Streamlit Edition
+# AQ-TLC v1.0 â€” Streamlit Edition
 
 **Advanced Quantitative Thin Layer Chromatography Analysis**  
 By [Giancarlo Pascali](mailto:g.pascali@unsw.edu.au)
@@ -12,9 +12,9 @@ workstation deployed as a Streamlit web app.
 
 The app uses a **Streamlit custom component** architecture:
 
-- **`frontend/`** — The full interactive HTML/CSS/JS canvas UI (unchanged from the desktop version), served as a Streamlit component iframe.
-- **`streamlit_app.py`** — The Streamlit entry point; routes requests from the JS frontend to the Python backend and returns responses.
-- **`tlc_backend.py`** — Pure Python computation (OpenCV, scikit-image, scipy); no Flask dependency.
+- **`frontend/`** â€” The full interactive HTML/CSS/JS canvas UI (unchanged from the desktop version), served as a Streamlit component iframe.
+- **`streamlit_app.py`** â€” The Streamlit entry point; routes requests from the JS frontend to the Python backend and returns responses.
+- **`tlc_backend.py`** â€” Pure Python computation (OpenCV, scikit-image, scipy); no Flask dependency.
 
 Communication between the JS canvas and Python uses the Streamlit component postMessage protocol implemented in `frontend/modules/streamlit_bridge.js`.
 
@@ -49,12 +49,12 @@ Open http://localhost:8501 in your browser.
 
 ## Features
 
-- ?? **Image Upload** — drag-and-drop or browse
-- ?? **Lane Drawing** — draw Origin/Front lines and spotting marks on the canvas
-- ?? **Find Lanes** — auto-calculate lane bounding boxes
-- ?? **Density Profiles** — server-computed 1-D densitograms per lane
-- ?? **Peak Detection** — scipy `find_peaks` with adjustable sensitivity/resolution
-- ?? **Wavelength Filtering** — spectral channel weighting (UV-254, Ninhydrin, Iodine, PMA, custom ?)
-- ?? **ROI Crop** — server-side crop with rotation correction
-- ?? **Undo** — Ctrl+Z undo stack (50 levels)
-- ?? **Export** — CSV / PDF report generation
+- ?? **Image Upload** â€” drag-and-drop or browse
+- ?? **Lane Drawing** â€” draw Origin/Front lines and spotting marks on the canvas
+- ?? **Find Lanes** â€” auto-calculate lane bounding boxes
+- ?? **Density Profiles** â€” server-computed 1-D densitograms per lane
+- ?? **Peak Detection** â€” scipy `find_peaks` with adjustable sensitivity/resolution
+- ?? **Wavelength Filtering** â€” spectral channel weighting (UV-254, Ninhydrin, Iodine, PMA, custom ?)
+- ?? **ROI Crop** â€” server-side crop with rotation correction
+- ?? **Undo** â€” Ctrl+Z undo stack (50 levels)
+- ?? **Export** â€” CSV / PDF report generation

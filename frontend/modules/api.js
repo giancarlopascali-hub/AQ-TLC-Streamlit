@@ -2,7 +2,7 @@
  * @module api
  * @file modules/api.js
  *
- * Network communication layer — sends lane geometry and image data to the
+ * Network communication layer â€” sends lane geometry and image data to the
  * Python backend via the Streamlit component bridge, and receives density
  * profiles + peak detections in response.
  *
@@ -89,7 +89,7 @@ function _handleProfilesResponse(data) {
  * registered in registerApiCallbacks().
  *
  * Peak preservation rule:
- *   If detectPeaks is false, existing peaks on a lane are NOT overwritten —
+ *   If detectPeaks is false, existing peaks on a lane are NOT overwritten â€”
  *   only the raw density profile is refreshed.
  *
  * @param {boolean} [detectPeaks=false]

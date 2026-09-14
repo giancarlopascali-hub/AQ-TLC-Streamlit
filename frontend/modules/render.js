@@ -7,14 +7,14 @@
  * render() is the only public export.  It clears and redraws the entire
  * main canvas on every call.  Drawing layers (bottom to top):
  *
- *   1. Background image      — scaled to fill canvas width, centred, rotated.
- *   2. Spotting marks        — blue circles (amber when selected).
- *   3. Origin / Front lines  — orange (Origin) or green (Front); amber when selected.
- *   4. Plate bounding boxes  — dashed white rectangles pairing each Origin+Front pair.
- *   5. Lane regions          — blue outlines; gold/red peak highlight bands inside.
- *   6. ROI rectangle         — orange dashed rectangle shown while 'roi' tool is active.
+ *   1. Background image      â€” scaled to fill canvas width, centred, rotated.
+ *   2. Spotting marks        â€” blue circles (amber when selected).
+ *   3. Origin / Front lines  â€” orange (Origin) or green (Front); amber when selected.
+ *   4. Plate bounding boxes  â€” dashed white rectangles pairing each Origin+Front pair.
+ *   5. Lane regions          â€” blue outlines; gold/red peak highlight bands inside.
+ *   6. ROI rectangle         â€” orange dashed rectangle shown while 'roi' tool is active.
  *
- * All annotation drawing (layers 2–6) happens inside the rotated image transform,
+ * All annotation drawing (layers 2â€“6) happens inside the rotated image transform,
  * so annotations always follow the image rotation correctly.
  *
  * Performance note: render() is called frequently (every mousemove during pan/drag).
@@ -135,12 +135,12 @@ export function render() {
 
   const ctx = canvas.getContext('2d');
 
-  // ── Lane count badge ───────────────────────────────────────────────────────
+  // â”€â”€ Lane count badge â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Update the badge in the sidebar header each frame (cheap, cached ref via $)
   const badge = $('lane-count-badge');
   if (badge) badge.textContent = `${state.lanes.length} Lanes`;
 
-  // ── Outer save: pan + zoom ─────────────────────────────────────────────────
+  // â”€â”€ Outer save: pan + zoom â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   ctx.save();
   ctx.translate(state.view.dx, state.view.dy);
   ctx.scale(state.view.zoom, state.view.zoom);
@@ -150,7 +150,7 @@ export function render() {
   const drawW = canvas.width;
   const drawH = state.imgH * sx;
 
-  // ── Inner save: image rotation ─────────────────────────────────────────────
+  // â”€â”€ Inner save: image rotation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // All annotation layers are drawn INSIDE this save/restore so they rotate
   // with the image.  The translate-rotate-translate pattern keeps the rotation
   // centre at the image centre.
@@ -161,7 +161,7 @@ export function render() {
   ctx.drawImage(imgSrc, -(state.imgW * sx) / 2, -(state.imgH * sx) / 2, drawW, drawH);
   ctx.translate(-(state.imgW * sx) / 2, -(state.imgH * sx) / 2);
 
-  // ══ Layer 2: Spotting Marks ════════════════════════════════════════════════
+  // â•â• Layer 2: Spotting Marks â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   state.spottingMarks.forEach(m => {
     const isSelected = state.activeMark === m;
     ctx.fillStyle   = isSelected ? '#ffc107' : '#58a6ff';
@@ -174,7 +174,7 @@ export function render() {
     ctx.stroke();
   });
 
-  // ══ Layer 3: Boundary Lines (Origin & Front) ═══════════════════════════════
+  // â•â• Layer 3: Boundary Lines (Origin & Front) â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   state.lines.forEach(l => {
     const isSelected = state.activeLine === l;
     const pos        = getImageCanvasPos(l.cx, l.cy, sx, sx);
@@ -203,7 +203,7 @@ export function render() {
     ctx.restore();
   });
 
-  // ══ Layer 4: Plate Bounding Boxes (paired Origin + Front lines) ════════════
+  // â•â• Layer 4: Plate Bounding Boxes (paired Origin + Front lines) â•â•â•â•â•â•â•â•â•â•â•â•
   // Pair each line with its nearest counterpart that is >50 scaled px away
   // vertically, forming an Origin/Front pair.  The dashed rectangle spans
   // 110% of the inter-line distance (5% padding each side).
@@ -267,7 +267,7 @@ export function render() {
     ctx.restore();
   });
 
-  // ══ Layer 5: Lane Regions & Peak Highlight Bands ══════════════════════════
+  // â•â• Layer 5: Lane Regions & Peak Highlight Bands â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   state.lanes.forEach(l => {
     ctx.save();
     ctx.translate(l.cx * sx, l.cy * sx);
@@ -275,12 +275,12 @@ export function render() {
 
     const isActive = state.activeLane === l;
 
-    // Lane outline — amber when active, translucent blue otherwise
+    // Lane outline â€” amber when active, translucent blue otherwise
     ctx.strokeStyle = isActive ? '#ffc107' : 'rgba(88,166,255,0.4)';
     ctx.lineWidth   = isActive ? 4 / state.view.zoom : 2 / state.view.zoom;
     ctx.strokeRect(-(l.w * sx) / 2, -(l.h * sx) / 2, l.w * sx, l.h * sx);
 
-    // Peak bands — drawn as horizontal strips across the lane width.
+    // Peak bands â€” drawn as horizontal strips across the lane width.
     // Gold (#ffd700) for auto-detected peaks, red (#e34c26) for manually adjusted.
     // Bands are more opaque when the lane is active for clearer visual feedback.
     const n = (l.profile || []).length;
@@ -318,7 +318,7 @@ export function render() {
     ctx.restore();
   });
 
-  // ══ Layer 6: ROI Crop Rectangle ════════════════════════════════════════════
+  // â•â• Layer 6: ROI Crop Rectangle â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
   if (state.roiRect) {
     ctx.strokeStyle = '#f0883e';
     ctx.lineWidth   = 2 / state.view.zoom;
@@ -331,7 +331,7 @@ export function render() {
     ctx.setLineDash([]);
   }
 
-  // ── Restore both save levels ───────────────────────────────────────────────
-  ctx.restore(); // inner  — removes image rotation
-  ctx.restore(); // outer  — removes pan + zoom
+  // â”€â”€ Restore both save levels â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  ctx.restore(); // inner  â€” removes image rotation
+  ctx.restore(); // outer  â€” removes pan + zoom
 }

@@ -2,7 +2,7 @@
  * @module export
  * @file modules/export.js
  *
- * Report generation engine — builds and exports analytical HTML/PDF reports.
+ * Report generation engine â€” builds and exports analytical HTML/PDF reports.
  */
 
 import { state } from './state.js';

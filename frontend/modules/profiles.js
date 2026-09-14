@@ -2,28 +2,28 @@
  * @module profiles
  * @file modules/profiles.js
  *
- * Densitogram panel — right-hand analysis sidebar of AQ-TLC.
+ * Densitogram panel â€” right-hand analysis sidebar of AQ-TLC.
  *
  * PUBLIC API
- * ──────────
- *   renderProfiles()   — Full panel rebuild. Call whenever the active lane changes
+ * â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+ *   renderProfiles()   â€” Full panel rebuild. Call whenever the active lane changes
  *                        or the integration method switches.
- *   drawProfileChart() — Redraws ONLY the canvas chart. Called every mousemove
+ *   drawProfileChart() â€” Redraws ONLY the canvas chart. Called every mousemove
  *                        during peak/boundary dragging to avoid rebuilding DOM.
  *
  * INTERNAL HELPERS
- * ────────────────
- *   buildPanelHeader()   — Lane name, export buttons, action buttons, tab strip.
- *   buildPeakTable()     — Table HTML for the three integration modes.
- *   generatePeakRowHTML() — Single row HTML (used by buildPeakTable and export.js).
- *   setupChartInteractions() — Mouse/wheel event handlers on the chart canvas.
+ * â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+ *   buildPanelHeader()   â€” Lane name, export buttons, action buttons, tab strip.
+ *   buildPeakTable()     â€” Table HTML for the three integration modes.
+ *   generatePeakRowHTML() â€” Single row HTML (used by buildPeakTable and export.js).
+ *   setupChartInteractions() â€” Mouse/wheel event handlers on the chart canvas.
  *
  * GLOBAL BRIDGE
- * ─────────────
+ * â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
  * A small set of functions are deliberately placed on `window` by the main entry
  * point (app.js) so that inline onchange handlers in the dynamically generated
  * per-peak input fields can reference them without circular module imports.
- * This is an explicit, documented architectural decision — see app.js for the full list.
+ * This is an explicit, documented architectural decision â€” see app.js for the full list.
  */
 
 import { state, $                                          } from './state.js';
@@ -33,15 +33,15 @@ import { updateDensitograms                                } from './api.js';
 import { render                                            } from './render.js';
 import { saveState                                         } from './workspace.js';
 
-// ════════════════════════════════════════════════════════════════════════════
-//  MAIN ENTRY — Full panel rebuild
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//  MAIN ENTRY â€” Full panel rebuild
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 /**
  * Completely rebuilds the right-hand analysis panel from the current state.
  *
  * This replaces the entire `#densitogram-list` innerHTML.  It is intentionally
- * NOT called on every mousemove — use drawProfileChart() for that instead.
+ * NOT called on every mousemove â€” use drawProfileChart() for that instead.
  *
  * Call this when:
  *   - The active lane changes (user clicks a lane on the canvas).
@@ -55,7 +55,7 @@ export function renderProfiles() {
 
   list.innerHTML = '';
 
-  // Empty state — no active lane selected
+  // Empty state â€” no active lane selected
   if (!state.activeLane) {
     list.innerHTML = `<div class="empty-state" style="text-align:center; padding:50px; opacity:0.5">
       Select a lane to view analysis
@@ -65,21 +65,21 @@ export function renderProfiles() {
 
   const l = state.activeLane;
 
-  // ── Build the panel HTML ───────────────────────────────────────────────────
+  // â”€â”€ Build the panel HTML â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const container = document.createElement('div');
   container.innerHTML = buildPanelHeader(l);
   list.appendChild(container);
 
-  // ── Attach event listeners to panel-level buttons ─────────────────────────
+  // â”€â”€ Attach event listeners to panel-level buttons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // These are attached here (not via inline onclick) to keep JS out of HTML.
   attachPanelEvents(container, l);
 
-  // ── Attach delegated listeners to the peak table body ─────────────────────
+  // â”€â”€ Attach delegated listeners to the peak table body â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Per-peak controls (type switch, value inputs) use data-action attributes
   // so they can be handled by a single delegated listener rather than N inline handlers.
   attachTableEvents(container, l);
 
-  // ── Draw the chart and set up its interactions ────────────────────────────
+  // â”€â”€ Draw the chart and set up its interactions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Use setTimeout(0) to allow the DOM to flush the new canvas element's layout
   // before reading its clientWidth/clientHeight for the drawing buffer size.
   setTimeout(() => {
@@ -90,9 +90,9 @@ export function renderProfiles() {
   }, 0);
 }
 
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 //  PANEL HTML BUILDERS
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 /**
  * Generates the HTML for the lane header, action buttons, and tab strip.
@@ -111,19 +111,19 @@ function buildPanelHeader(l) {
       <div style="display:flex; gap:6px">
         <button id="btn-export-lane" class="action-btn secondary"
                 style="font-size:0.75rem; padding:4px 10px" title="Export this active lane">
-          📄 Export Lane
+          ðŸ“„ Export Lane
         </button>
         <button id="btn-export-all" class="action-btn primary"
                 style="font-size:0.75rem; padding:4px 10px" title="Export all detected lanes">
-          📚 Full Report
+          ðŸ“š Full Report
         </button>
       </div>
     </div>
 
     <div style="margin-bottom:10px; display:flex; gap:6px; flex-wrap:wrap;">
-      <button id="btn-delete-peaks"    class="action-btn secondary" style="font-size:0.65rem; padding:3px 8px">🗑️ Delete all peaks</button>
-      <button id="btn-reset-integ"     class="action-btn secondary" style="font-size:0.65rem; padding:3px 8px">🔄 Reset integration</button>
-      <button id="btn-reset-chartview" class="action-btn secondary" style="font-size:0.65rem; padding:3px 8px">🔍 Reset view</button>
+      <button id="btn-delete-peaks"    class="action-btn secondary" style="font-size:0.65rem; padding:3px 8px">ðŸ—‘ï¸ Delete all peaks</button>
+      <button id="btn-reset-integ"     class="action-btn secondary" style="font-size:0.65rem; padding:3px 8px">ðŸ”„ Reset integration</button>
+      <button id="btn-reset-chartview" class="action-btn secondary" style="font-size:0.65rem; padding:3px 8px">ðŸ” Reset view</button>
     </div>
 
     <canvas id="chart-active" style="width:100%; height:280px; background:#010409;
@@ -173,9 +173,9 @@ function buildPeakTable(l) {
   `;
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-//  PEAK ROW HTML — shared by profiles panel and export.js
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//  PEAK ROW HTML â€” shared by profiles panel and export.js
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 /**
  * Generates the <tr> HTML string for a single peak, for any integration mode.
@@ -225,7 +225,7 @@ export function generatePeakRowHTML(pk, i, method, opts = {}) {
              ${nameAttr}>
     </td>`;
 
-  // Type-switch cell (S / N / A) — used by calibration modes
+  // Type-switch cell (S / N / A) â€” used by calibration modes
   const typeSwitchCell = (showInteractive) => `
     <td style="text-align:center">
       <div class="type-switch">
@@ -243,7 +243,7 @@ export function generatePeakRowHTML(pk, i, method, opts = {}) {
     ? `<td style="text-align:center; font-weight:700">${type}</td>`
     : typeSwitchCell(true);
 
-  // ── MW Calibration mode ────────────────────────────────────────────────────
+  // â”€â”€ MW Calibration mode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (method === 'mw_calibration') {
     let mwCell;
     if (type === 'S') {
@@ -266,7 +266,7 @@ export function generatePeakRowHTML(pk, i, method, opts = {}) {
     return `<tr style="${rowStyle}">${nameCell}<td style="text-align:center">${rfDisplay}</td><td style="text-align:right">${areaDisplay}</td>${typeCell}${mwCell}</tr>`;
   }
 
-  // ── Area Calibration mode ──────────────────────────────────────────────────
+  // â”€â”€ Area Calibration mode â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (method === 'calibration') {
     let valCell;
     if (type === 'S') {
@@ -288,7 +288,7 @@ export function generatePeakRowHTML(pk, i, method, opts = {}) {
     return `<tr style="${rowStyle}">${nameCell}<td style="text-align:center">${rfDisplay}</td><td style="text-align:right">${areaDisplay}</td>${typeCell}${valCell}</tr>`;
   }
 
-  // ── Relative Intensity mode (default) ──────────────────────────────────────
+  // â”€â”€ Relative Intensity mode (default) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const pctArea = totalArea > 0 ? ((pk.area / totalArea) * 100).toFixed(1) : 0;
   const pctCorr = totalCorr > 0 ? ((corrArea / totalCorr) * 100).toFixed(1) : 0;
   const areaDisplay = pk.area.toLocaleString(undefined, { maximumFractionDigits: 1 });
@@ -312,9 +312,9 @@ export function generatePeakRowHTML(pk, i, method, opts = {}) {
   </tr>`;
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-//  EVENT BINDING — Panel-level buttons
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//  EVENT BINDING â€” Panel-level buttons
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 /**
  * Attaches click listeners to the action buttons in the panel header.
@@ -373,9 +373,9 @@ function attachPanelEvents(container, l) {
   });
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-//  EVENT BINDING — Delegated peak table events
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//  EVENT BINDING â€” Delegated peak table events
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 /**
  * Attaches delegated event listeners to the peak table body.
@@ -389,7 +389,7 @@ function attachTableEvents(container, l) {
   const tbody = container.querySelector('#peak-table-body');
   if (!tbody) return;
 
-  // ── Type switch clicks (S / N / A) ────────────────────────────────────────
+  // â”€â”€ Type switch clicks (S / N / A) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   tbody.addEventListener('click', e => {
     const el = e.target.closest('[data-action="set-peak-type"]');
     if (!el) return;
@@ -399,7 +399,7 @@ function attachTableEvents(container, l) {
     renderProfiles();
   });
 
-  // ── Input field changes (MW, calibration value, abs ratio, peak name) ────
+  // â”€â”€ Input field changes (MW, calibration value, abs ratio, peak name) â”€â”€â”€â”€
   tbody.addEventListener('change', e => {
     const el  = e.target;
     const idx = parseInt(el.dataset.idx, 10);
@@ -415,15 +415,15 @@ function attachTableEvents(container, l) {
       renderProfiles();
     } else if (el.dataset.action === 'set-peak-name' && !isNaN(idx)) {
       l.peaks[idx].name = el.value;
-      // No full re-render needed for a name change — just the table would suffice,
+      // No full re-render needed for a name change â€” just the table would suffice,
       // but renderProfiles is cheap enough here.
     }
   });
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-//  CHART CANVAS — Drawing
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//  CHART CANVAS â€” Drawing
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 /**
  * Draws the densitogram chart on the provided canvas element.
@@ -453,15 +453,15 @@ export function drawProfileChart(cv, l) {
   const raw = l.profile;
   if (!raw || raw.length === 0) return;
 
-  // The profile from the server is stored Origin→Front.
-  // Reverse it so index 0 = Front (Rf≈1, left of chart), matching the chart axis.
+  // The profile from the server is stored Originâ†’Front.
+  // Reverse it so index 0 = Front (Rfâ‰ˆ1, left of chart), matching the chart axis.
   const p = raw.slice().reverse();
 
   const minV  = Math.min(...p);
   const maxV  = Math.max(...p);
   const range = (maxV - minV) || 1;
 
-  // Chart padding (pixels) — provides space for axis labels and handles
+  // Chart padding (pixels) â€” provides space for axis labels and handles
   const PAD_L = 50, PAD_R = 50, PAD_T = 30, PAD_B = 40;
   const plotW = cv.width  - PAD_L - PAD_R;
   const plotH = cv.height - PAD_T - PAD_B;
@@ -475,7 +475,7 @@ export function drawProfileChart(cv, l) {
     y: PAD_T + (1 - (val - minV) / range) * plotH,
   }));
 
-  // ── Grid lines ────────────────────────────────────────────────────────────
+  // â”€â”€ Grid lines â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   ctx.strokeStyle = 'rgba(255,255,255,0.05)';
   ctx.lineWidth   = 1;
   for (let i = 0; i <= 4; i++) {
@@ -486,13 +486,13 @@ export function drawProfileChart(cv, l) {
     ctx.stroke();
   }
 
-  // ── Clip to plot area (prevents peaks from drawing over axis labels) ───────
+  // â”€â”€ Clip to plot area (prevents peaks from drawing over axis labels) â”€â”€â”€â”€â”€â”€â”€
   ctx.save();
   ctx.beginPath();
   ctx.rect(PAD_L, PAD_T, plotW, plotH);
   ctx.clip();
 
-  // ── Filled density curve ──────────────────────────────────────────────────
+  // â”€â”€ Filled density curve â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   ctx.beginPath();
   ctx.moveTo(pts[0].x, PAD_T + plotH);
   pts.forEach(pt => ctx.lineTo(pt.x, pt.y));
@@ -501,14 +501,14 @@ export function drawProfileChart(cv, l) {
   ctx.fillStyle = 'rgba(31, 111, 235, 0.15)';
   ctx.fill();
 
-  // ── Signal line ───────────────────────────────────────────────────────────
+  // â”€â”€ Signal line â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   ctx.beginPath();
   ctx.strokeStyle = '#58a6ff';
   ctx.lineWidth   = 2.5;
   pts.forEach((pt, i) => (i === 0 ? ctx.moveTo(pt.x, pt.y) : ctx.lineTo(pt.x, pt.y)));
   ctx.stroke();
 
-  // ── Peak integration windows ──────────────────────────────────────────────
+  // â”€â”€ Peak integration windows â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   (l.peaks || []).forEach(pk => {
     const apexX  = PAD_L + ((pk.idx / (p.length - 1)) * z + off) * plotW;
     const apexY  = PAD_T + (1 - (pk.height - minV) / range) * plotH;
@@ -541,7 +541,7 @@ export function drawProfileChart(cv, l) {
     ctx.beginPath(); ctx.moveTo(lb_x, PAD_T); ctx.lineTo(lb_x, PAD_T + plotH); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(rb_x, PAD_T); ctx.lineTo(rb_x, PAD_T + plotH); ctx.stroke();
 
-    // Drag handles — circular dots at mid-height of boundary lines
+    // Drag handles â€” circular dots at mid-height of boundary lines
     ctx.beginPath();
     ctx.arc(lb_x, PAD_T + plotH / 2, 4, 0, Math.PI * 2);
     ctx.arc(rb_x, PAD_T + plotH / 2, 4, 0, Math.PI * 2);
@@ -572,7 +572,7 @@ export function drawProfileChart(cv, l) {
 
   ctx.restore(); // remove clip
 
-  // ── Axis labels ───────────────────────────────────────────────────────────
+  // â”€â”€ Axis labels â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   ctx.font      = 'bold 11px Inter';
   ctx.textAlign = 'center';
   ctx.fillStyle = '#8b949e';
@@ -580,9 +580,9 @@ export function drawProfileChart(cv, l) {
   ctx.fillText('FRONT (1.0)',  cv.width - PAD_R,   cv.height - 15);
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-//  CHART CANVAS — Interaction (mouse wheel, drag, peak add/delete)
-// ════════════════════════════════════════════════════════════════════════════
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+//  CHART CANVAS â€” Interaction (mouse wheel, drag, peak add/delete)
+// â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 
 /**
  * Wires up all mouse and wheel event handlers on the chart canvas.
@@ -590,10 +590,10 @@ export function drawProfileChart(cv, l) {
  *   - Horizontal zoom via mouse wheel
  *   - Peak boundary drag (resize integration window)
  *   - Peak apex drag (move peak location)
- *   - Single click on empty space → add new peak
- *   - Right-click on apex → delete peak
+ *   - Single click on empty space â†’ add new peak
+ *   - Right-click on apex â†’ delete peak
  *   - Dynamic cursor changes (col-resize / pointer / crosshair)
- *   - Double-click → re-run peak detection
+ *   - Double-click â†’ re-run peak detection
  *
  * @param {HTMLCanvasElement} cv - The chart canvas element.
  * @param {Object}            l  - The active lane object.
@@ -604,7 +604,7 @@ function setupChartInteractions(cv, l) {
   const plotW = cv.width  - PAD_L - PAD_R;
   const plotH = cv.height - PAD_T - PAD_B;
 
-  // Reverse the profile so chart x-axis runs Front→Origin (matching Rf direction)
+  // Reverse the profile so chart x-axis runs Frontâ†’Origin (matching Rf direction)
   const raw = l.profile;
   const p   = (raw || []).slice().reverse();
 
@@ -629,7 +629,7 @@ function setupChartInteractions(cv, l) {
     return PAD_L + ((idx / (p.length - 1)) * z + off) * plotW;
   };
 
-  // ── Horizontal zoom via mouse wheel ───────────────────────────────────────
+  // â”€â”€ Horizontal zoom via mouse wheel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   cv.onwheel = e => {
     e.preventDefault();
     const rect = cv.getBoundingClientRect();
@@ -651,7 +651,7 @@ function setupChartInteractions(cv, l) {
     drawProfileChart(cv, l);
   };
 
-  // ── Mouse down — hit detection and drag start ─────────────────────────────
+  // â”€â”€ Mouse down â€” hit detection and drag start â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   cv.onmousedown = me => {
     const rect = cv.getBoundingClientRect();
     const mx   = me.clientX - rect.left;
@@ -691,7 +691,7 @@ function setupChartInteractions(cv, l) {
       saveState();
       state.isDraggingBound = hitBound;
     } else {
-      // No hit — create a new peak at the clicked position
+      // No hit â€” create a new peak at the clicked position
       const rf = calculateRf(idx, p.length);
       if (rf < 0 || rf > 1) return;  // Outside valid Rf range
 
@@ -721,16 +721,16 @@ function setupChartInteractions(cv, l) {
     }
   };
 
-  // ── Double-click — reset peak detection ───────────────────────────────────
+  // â”€â”€ Double-click â€” reset peak detection â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   cv.ondblclick = () => updateDensitograms(true);
 
-  // ── Mouse move — handle drags and cursor feedback ─────────────────────────
+  // â”€â”€ Mouse move â€” handle drags and cursor feedback â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   cv.onmousemove = me => {
     const rect = cv.getBoundingClientRect();
     const mx   = me.clientX - rect.left;
     const idx  = xToIdx(mx);
 
-    // ── Dynamic cursor feedback (no active drag) ───────────────────────────
+    // â”€â”€ Dynamic cursor feedback (no active drag) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (!state.isDraggingBound && !state.isDraggingPeak) {
       let cursor = 'crosshair';
       for (const pk of (l.peaks || [])) {
@@ -743,7 +743,7 @@ function setupChartInteractions(cv, l) {
       cv.style.cursor = cursor;
     }
 
-    // ── Boundary drag ─────────────────────────────────────────────────────
+    // â”€â”€ Boundary drag â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (state.isDraggingBound) {
       const { pk, type } = state.isDraggingBound;
       if (type === 'lb') pk.lb = Math.min(pk.rb - 1, Math.max(0, idx));
@@ -762,7 +762,7 @@ function setupChartInteractions(cv, l) {
       return;
     }
 
-    // ── Apex drag ──────────────────────────────────────────────────────────
+    // â”€â”€ Apex drag â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (!state.isDraggingPeak) return;
     const pk = state.isDraggingPeak;
     const rf = calculateRf(idx, p.length);
@@ -795,7 +795,7 @@ function setupChartInteractions(cv, l) {
     render();
   };
 
-  // ── Mouse up — end any active drag ────────────────────────────────────────
+  // â”€â”€ Mouse up â€” end any active drag â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   cv.onmouseup = () => {
     // After a drag ends, do a full renderProfiles() to update the table with
     // the new area values that accumulated during the drag.
@@ -805,6 +805,6 @@ function setupChartInteractions(cv, l) {
     if (wasDragging) renderProfiles();
   };
 
-  // ── Context menu — suppress browser right-click menu on chart ─────────────
+  // â”€â”€ Context menu â€” suppress browser right-click menu on chart â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   cv.oncontextmenu = e => e.preventDefault();
 }

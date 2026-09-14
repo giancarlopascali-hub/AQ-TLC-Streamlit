@@ -1,7 +1,7 @@
 """
 streamlit_app.py
 ================
-AQ-TLC v1.0 — Streamlit Cloud entry point.
+AQ-TLC v1.0 â€” Streamlit Cloud entry point.
 
 Architecture
 ------------
@@ -18,8 +18,8 @@ Communication flow:
 
 Session state keys
 ------------------
-  pending_response : dict | None  — response to send to the component next render
-  last_req_id      : str          — stringified last processed request_id (dedup)
+  pending_response : dict | None  â€” response to send to the component next render
+  last_req_id      : str          â€” stringified last processed request_id (dedup)
 """
 
 import streamlit as st
@@ -37,7 +37,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
     menu_items={
         "Get Help": "https://github.com/giancarlopascali-hub/AQ-TLC-streamlit",
-        "About": "AQ-TLC v1.0 — Advanced Quantitative TLC Analysis\nBy Giancarlo Pascali",
+        "About": "AQ-TLC v1.0 â€” Advanced Quantitative TLC Analysis\nBy Giancarlo Pascali",
     },
 )
 
@@ -108,14 +108,14 @@ if component_value is not None:
             }
 
         else:
-            # Unknown action — clear any stale response
+            # Unknown action â€” clear any stale response
             st.session_state.pending_response = None
 
         # Rerun so the component re-renders with the new response in its args.
         st.rerun()
 
     else:
-        # No new request — clear any pending response so it isn't re-applied
+        # No new request â€” clear any pending response so it isn't re-applied
         # on subsequent natural reruns (e.g. from Streamlit's own polling).
         if component_value.get("action") != st.session_state.last_req_id:
             st.session_state.pending_response = None
