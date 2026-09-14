@@ -1,7 +1,7 @@
 """
 tlc_backend.py
 ==============
-Pure Python computation for AQ-TLC — no Flask dependency.
+Pure Python computation for AQ-TLC - no Flask dependency.
 
 All functions take a plain dict (matching the JSON payloads from the
 original Flask endpoints) and return a plain dict.  This module is shared
@@ -10,8 +10,8 @@ by any other runner without bringing in Flask.
 
 Functions
 ---------
-generate_profiles(data)   — density profiles + peak detection
-crop_image(data)          — ROI crop with rotation correction
+generate_profiles(data)   - density profiles + peak detection
+crop_image(data)          - ROI crop with rotation correction
 """
 
 from __future__ import annotations
@@ -24,6 +24,9 @@ import traceback
 import cv2
 import numpy as np
 from PIL import Image
+
+# NumPy 2.0 compatibility: np.trapz was renamed to np.trapezoid
+_trapz = getattr(np, "trapezoid", getattr(np, "trapz", None))
 
 
 # -- Image cache ---------------------------------------------------------------
@@ -49,7 +52,7 @@ def load_image(b64str: str) -> np.ndarray:
 
 
 def wavelength_to_rgb(wavelength: float):
-    """Convert wavelength (nm, 380–750) to RGB tuple in [0, 1]."""
+    """Convert wavelength (nm, 380-750) to RGB tuple in [0, 1]."""
     if 380 <= wavelength < 440:
         r = -(wavelength - 440) / (440 - 380); g = 0.0; b = 1.0
     elif 440 <= wavelength < 490:
@@ -170,7 +173,7 @@ def generate_profiles(data: dict) -> dict:
 
     Parameters
     ----------
-    data : dict  — mirrors the JSON body of POST /generate_profiles
+    data : dict  - mirrors the JSON body of POST /generate_profiles
 
     Returns
     -------
@@ -282,7 +285,7 @@ def generate_profiles(data: dict) -> dict:
                         v_lb, v_rb = max(0, idx - 2), min(n - 1, idx + 2)
 
                     base_val = min(p_norm[lb], p_norm[rb])
-                    area = float(np.trapz(np.clip(p_norm[lb:rb + 1] - base_val, 0, None)))
+                    area = float(_trapz(np.clip(p_norm[lb:rb + 1] - base_val, 0, None)))
 
                     peaks_out.append({
                         "idx":    int(idx),
