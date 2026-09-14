@@ -39,7 +39,12 @@ export function init() {
   const dz = $('drop-zone');
   const fi = $('file-input-prompter');
   if (dz && fi) {
-    dz.onclick = () => fi.click();
+    // If dz is a <label for="file-input-prompter">, clicking it natively activates fi.
+    // Calling fi.click() inside a label's click listener causes a duplicate click event
+    // which cancels the file dialog in Chromium. Only attach onclick if not a label.
+    if (dz.tagName !== 'LABEL') {
+      dz.onclick = () => fi.click();
+    }
     dz.ondragover = e => {
       e.preventDefault();
       dz.style.background = 'rgba(31, 111, 235, 0.1)';
@@ -56,9 +61,18 @@ export function init() {
       if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
     };
     fi.onchange = e => {
-      if (e.target.files.length) handleFile(e.target.files[0]);
+      if (e.target.files && e.target.files.length) handleFile(e.target.files[0]);
     };
   }
+
+  // Global window drop listener so dragging a file anywhere onto the page works
+  window.addEventListener('dragover', e => e.preventDefault());
+  window.addEventListener('drop', e => {
+    e.preventDefault();
+    if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
+      handleFile(e.dataTransfer.files[0]);
+    }
+  });
 
   // -- Sidebar Action Buttons -------------------------------------------------
   $('btn-new').onclick = () => resetState(false);

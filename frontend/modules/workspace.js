@@ -18,7 +18,7 @@ import { state, $        } from './state.js';
 import { UNDO_STACK_LIMIT } from './constants.js';
 import { render           } from './render.js';
 import { renderProfiles   } from './profiles.js';
-import { stSend, stOnRender } from './streamlit_bridge.js';
+import { stSend, stOnRender, stSetHeight } from './streamlit_bridge.js';
 
 // -- Crop response counter -----------------------------------------------------
 let _cropReqCounter = 0;
@@ -138,6 +138,7 @@ export function handleFile(file) {
 
       renderProfiles();
       render();
+      stSetHeight();
     };
     img.src = e.target.result;
   };
@@ -192,6 +193,7 @@ export function resetState(keepImage = true) {
     state.originalB64 = null;
     $('upload-prompt').style.display = 'flex';
     $('app-grid').style.display      = 'none';
+    stSetHeight();
   } else if (state.originalB64) {
     const img   = new Image();
     img.onload  = () => {
@@ -202,6 +204,7 @@ export function resetState(keepImage = true) {
       state.imgH   = Math.round(img.naturalHeight * scale);
       renderProfiles();
       render();
+      stSetHeight();
     };
     img.src = state.originalB64;
   }

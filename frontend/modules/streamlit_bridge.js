@@ -22,7 +22,7 @@ function _post(msg) {
  * This function is retained so call-sites in init.js remain readable.
  */
 export function stReady() {
-  // Already sent inline — nothing to do.
+  // Already sent inline - nothing to do.
 }
 
 /**
