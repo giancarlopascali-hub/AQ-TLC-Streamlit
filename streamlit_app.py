@@ -21,17 +21,22 @@ The "streamlit:componentReady" message is sent IMMEDIATELY by an inline
 
 import os
 import sys
+from PIL import Image
 import streamlit as st
 import streamlit.components.v1 as components
 
 import tlc_backend
 
 # ---------------------------------------------------------------------------
-# Page config
+# Page config & favicon
 # ---------------------------------------------------------------------------
+_ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+_FAVICON_PATH = os.path.join(_ROOT_DIR, "favicon.ico")
+_favicon = Image.open(_FAVICON_PATH) if os.path.exists(_FAVICON_PATH) else None
+
 st.set_page_config(
     page_title="AQ-TLC v1.0",
-    page_icon="&#128300;",
+    page_icon=_favicon,
     layout="wide",
     initial_sidebar_state="collapsed",
     menu_items={
