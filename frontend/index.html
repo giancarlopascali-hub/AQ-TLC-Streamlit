@@ -112,15 +112,15 @@
         </header>
         <div style="text-align:center;padding:6px;background:rgba(255,193,7,0.1);border-bottom:1px solid rgba(255,255,255,0.05);">
           <a href="guide.html" target="_blank"
-             style="color:#ffc107;font-size:0.75rem;text-decoration:none;font-weight:600;">Quick Guide</a>
+             style="color:#ffc107;font-size:0.75rem;text-decoration:none;font-weight:600;">&#128214; Quick Guide</a>
         </div>
 
         <div class="sidebar-scroll">
 
           <div class="sidebar-section" style="padding:4px 10px;border-bottom:1px solid rgba(255,255,255,0.05)">
             <div class="nav-grid" style="gap:4px">
-              <button class="nav-item secondary" id="btn-new"   style="padding:4px;font-size:0.75rem">New</button>
-              <button class="nav-item secondary" id="btn-reset" style="padding:4px;font-size:0.75rem">Reset</button>
+              <button class="nav-item secondary" id="btn-new"   style="padding:4px;font-size:0.75rem">&#128194; New</button>
+              <button class="nav-item secondary" id="btn-reset" style="padding:4px;font-size:0.75rem">&#128259; Reset</button>
             </div>
           </div>
 
@@ -131,7 +131,7 @@
               <span>WAVELENGTH FILTERING</span>
               <button id="btn-invert-colors" class="mode-toggle-btn"
                       style="font-size:0.58rem;padding:1px 5px;border-radius:3px;border:1px solid var(--border);"
-                      title="Invert image colors">Invert</button>
+                      title="Invert image colors">&#127912; Invert</button>
             </div>
             <div class="wl-preset-grid"
                  style="display:grid;grid-template-columns:repeat(3,1fr);gap:3px;margin-bottom:6px;">
@@ -169,16 +169,16 @@
             <div class="sidebar-title" style="margin-bottom:4px;font-size:0.65rem;color:var(--text-dim)">
               TOOLS &amp; ACTIONS
             </div>
-            <div class="tool-grid" style="grid-template-columns:repeat(3,1fr);gap:2px;">
-              <button class="tool-btn small" data-tool="roi"        title="Crop ROI"  style="padding:2px">ROI</button>
-              <button class="tool-btn small" data-tool="pan"        title="Pan"       style="padding:2px">Pan</button>
-              <button class="tool-btn small" data-tool="rotate_img" title="Rotate"    style="padding:2px">Rotate</button>
-              <button class="tool-btn small" data-tool="select"     title="Select"    style="padding:2px">Select</button>
-              <button class="tool-btn small" data-tool="line"       title="Lines"     style="padding:2px">Lines</button>
-              <button class="tool-btn small" data-tool="spotting"   title="Marks"     style="padding:2px">Marks</button>
+            <div class="tool-grid" style="grid-template-columns:repeat(3,1fr);gap:4px;">
+              <button class="tool-btn small" data-tool="roi"        title="Crop ROI (drag to crop)" style="padding:4px 0;font-size:1.15rem;display:flex;align-items:center;justify-content:center;">&#9986;&#65039;</button>
+              <button class="tool-btn small" data-tool="pan"        title="Pan &amp; Zoom (drag to pan, scroll to zoom)" style="padding:4px 0;font-size:1.15rem;display:flex;align-items:center;justify-content:center;">&#9995;</button>
+              <button class="tool-btn small" data-tool="rotate_img" title="Rotate (drag to rotate, double-click for 90&deg;)" style="padding:4px 0;font-size:1.15rem;display:flex;align-items:center;justify-content:center;">&#128257;</button>
+              <button class="tool-btn small" data-tool="select"     title="Select &amp; Edit (click element, drag to move, Del to delete)" style="padding:4px 0;font-size:1.15rem;display:flex;align-items:center;justify-content:center;">&#128070;</button>
+              <button class="tool-btn small" data-tool="line"       title="Boundary Lines (drag to draw Origin &amp; Solvent Front lines)" style="padding:4px 0;font-size:1.15rem;display:flex;align-items:center;justify-content:center;">&#128207;</button>
+              <button class="tool-btn small" data-tool="spotting"   title="Spotting Marks (click along Origin line to place sample spots)" style="padding:4px 0;font-size:1.15rem;display:flex;align-items:center;justify-content:center;">&#128205;</button>
             </div>
             <button class="action-btn primary small" id="btn-calc-lanes"
-                    style="margin-top:4px;font-size:0.7rem;padding:4px;width:100%">Find Lanes</button>
+                    style="margin-top:6px;font-size:0.75rem;padding:6px;width:100%;font-weight:600;">&#128269; Find Lanes</button>
             <div class="polarity-switch-wrap"
                  style="margin-top:8px;display:flex;flex-direction:column;gap:4px">
               <div class="sidebar-title" style="margin:0;font-size:0.6rem;color:var(--text-dim)">
@@ -216,7 +216,7 @@
               <input type="range" id="peak-threshold" min="5" max="95" value="50" style="height:12px">
             </div>
             <button class="action-btn secondary small" id="btn-restore-defaults"
-                    style="margin-top:8px;font-size:0.65rem;padding:2px;width:100%">Restore Defaults</button>
+                    style="margin-top:8px;font-size:0.65rem;padding:3px;width:100%">&#8634; Restore Defaults</button>
           </div>
 
         </div><!-- /sidebar-scroll -->

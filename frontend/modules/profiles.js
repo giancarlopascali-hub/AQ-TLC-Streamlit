@@ -111,19 +111,19 @@ function buildPanelHeader(l) {
       <div style="display:flex; gap:6px">
         <button id="btn-export-lane" class="action-btn secondary"
                 style="font-size:0.75rem; padding:4px 10px" title="Export this active lane">
-            Export Lane
+          &#128196; Export Lane
         </button>
         <button id="btn-export-all" class="action-btn primary"
                 style="font-size:0.75rem; padding:4px 10px" title="Export all detected lanes">
-            Full Report
+          &#128218; Full Report
         </button>
       </div>
     </div>
 
     <div style="margin-bottom:10px; display:flex; gap:6px; flex-wrap:wrap;">
-      <button id="btn-delete-peaks"    class="action-btn secondary" style="font-size:0.65rem; padding:3px 8px">   Delete all peaks</button>
-      <button id="btn-reset-integ"     class="action-btn secondary" style="font-size:0.65rem; padding:3px 8px">  Reset integration</button>
-      <button id="btn-reset-chartview" class="action-btn secondary" style="font-size:0.65rem; padding:3px 8px">  Reset view</button>
+      <button id="btn-delete-peaks"    class="action-btn secondary" style="font-size:0.65rem; padding:3px 8px" title="Delete all detected peaks in this lane">&#128465;&#65039; Delete all peaks</button>
+      <button id="btn-reset-integ"     class="action-btn secondary" style="font-size:0.65rem; padding:3px 8px" title="Re-run automated peak detection for this lane">&#128259; Reset integration</button>
+      <button id="btn-reset-chartview" class="action-btn secondary" style="font-size:0.65rem; padding:3px 8px" title="Reset chart zoom and pan">&#127919; Reset view</button>
     </div>
 
     <canvas id="chart-active" style="width:100%; height:280px; background:#010409;
