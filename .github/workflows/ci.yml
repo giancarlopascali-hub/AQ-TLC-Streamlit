@@ -1,0 +1,38 @@
+name: Verify desktop application
+
+on:
+  push:
+    branches: [main, "codex/**"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install Python dependencies
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt pytest
+      - name: Check Python modules
+        run: python -m py_compile streamlit_app.py tlc_backend.py
+      - name: Run Python tests
+        run: python -m pytest -q tests/test_tlc_backend.py
+      - name: Check JavaScript modules
+        run: |
+          node --check frontend/modules/analysis.js
+          node --check frontend/modules/api.js
+          node --check frontend/modules/export.js
+          node --check frontend/modules/profiles.js
+          node --check frontend/modules/workspace.js
+      - name: Run JavaScript contract tests
+        run: node tests/javascript/analysis.test.mjs
