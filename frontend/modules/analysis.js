@@ -41,8 +41,69 @@ import { RF_ORIGIN_OFFSET, RF_FRONT_OFFSET } from './constants.js';
  * @returns {number}   - Rf value.  Values outside [0, 1] indicate outside-bounds positions.
  */
 export function calculateRf(idx, n) {
+  if (!Number.isFinite(idx) || !Number.isFinite(n) || n < 2) return 0;
   const y_fract = 1.0 - (idx / (n - 1));
   return (RF_ORIGIN_OFFSET - y_fract) / (RF_ORIGIN_OFFSET - RF_FRONT_OFFSET);
+}
+
+// -----------------------------------------------------------------------------
+//  PEAK INTEGRATION
+// -----------------------------------------------------------------------------
+
+/**
+ * Trapezoidal area above the smaller endpoint baseline.  The input must be
+ * the backend's origin-to-front `profile_analysis` (normalised 0..100), not
+ * the visual/raw density profile.  It mirrors tlc_backend.calculate_peak_area.
+ */
+export function calculatePeakArea(profile, lb, rb) {
+  if (!Array.isArray(profile) || profile.length < 2) return 0;
+  const n = profile.length;
+  const left = Math.max(0, Math.min(Math.round(lb), n - 1));
+  const right = Math.max(0, Math.min(Math.round(rb), n - 1));
+  if (right <= left || !Number.isFinite(profile[left]) || !Number.isFinite(profile[right])) return 0;
+
+  const baseline = Math.min(profile[left], profile[right]);
+  let area = 0;
+  for (let index = left; index < right; index++) {
+    const y0 = Math.max(0, Number(profile[index]) - baseline);
+    const y1 = Math.max(0, Number(profile[index + 1]) - baseline);
+    if (!Number.isFinite(y0) || !Number.isFinite(y1)) return 0;
+    area += (y0 + y1) / 2;
+  }
+  return Math.max(0, area);
+}
+
+/**
+ * Finds AUC and threshold-display bounds for a manual peak in the common
+ * origin-to-front analysis signal.  Display bounds are descriptive only;
+ * area bounds remain the draggable/reportable integration interval.
+ */
+export function findPeakBounds(profile, apex, thresholdPercent = 50) {
+  if (!Array.isArray(profile) || profile.length < 2) {
+    return { area_lb: 0, area_rb: 0, display_lb: 0, display_rb: 0 };
+  }
+  const index = Math.max(0, Math.min(Math.round(apex), profile.length - 1));
+  let areaLb = index;
+  let areaRb = index;
+  while (areaLb > 0 && profile[areaLb - 1] <= profile[areaLb]) areaLb--;
+  while (areaRb < profile.length - 1 && profile[areaRb + 1] <= profile[areaRb]) areaRb++;
+
+  const base = Math.min(profile[areaLb], profile[areaRb]);
+  const fraction = Math.max(0, Math.min(100, Number(thresholdPercent) || 50)) / 100;
+  const cutoff = base + (profile[index] - base) * fraction;
+  let displayLb = areaLb;
+  let displayRb = areaRb;
+  for (let pos = index; pos > areaLb; pos--) {
+    if (profile[pos] < cutoff) { displayLb = pos; break; }
+  }
+  for (let pos = index; pos < areaRb; pos++) {
+    if (profile[pos] < cutoff) { displayRb = pos; break; }
+  }
+  if (displayRb - displayLb < 2) {
+    displayLb = Math.max(areaLb, index - 2);
+    displayRb = Math.min(areaRb, index + 2);
+  }
+  return { area_lb: areaLb, area_rb: areaRb, display_lb: displayLb, display_rb: displayRb };
 }
 
 //                                                                             
@@ -81,7 +142,8 @@ export function calculateCalibrationCurve() {
 
   // Single standard: force the regression line through the origin
   if (standards.length === 1) {
-    const m = standards[0].value / (standards[0].area || 1);
+    if (!Number.isFinite(standards[0].area) || standards[0].area <= 0) return null;
+    const m = standards[0].value / standards[0].area;
     return area => area * m;
   }
 
@@ -100,7 +162,7 @@ export function calculateCalibrationCurve() {
   const b = (sumY - m * sumX) / n;
 
   // Degenerate case: all standards have identical area -> constant output
-  if (isNaN(m)) return () => standards[0].value;
+  if (!Number.isFinite(m) || !Number.isFinite(b)) return null;
 
   // Clamp output at 0 to prevent negative calibrated values from extrapolation
   return area => Math.max(0, m * area + b);
@@ -147,6 +209,7 @@ export function calculateMWCalibrationCurve() {
     // -- Extrapolate below lowest standard ----------------------------------
     if (rf <= standards[0].x) {
       const s0 = standards[0], s1 = standards[1];
+      if (s1.x === s0.x) return null;
       const slope = (s1.y - s0.y) / (s1.x - s0.x);
       return Math.pow(10, s0.y + slope * (rf - s0.x));
     }
@@ -155,6 +218,7 @@ export function calculateMWCalibrationCurve() {
     const last = standards[standards.length - 1];
     if (rf >= last.x) {
       const sN1 = standards[standards.length - 2];
+      if (last.x === sN1.x) return null;
       const slope = (last.y - sN1.y) / (last.x - sN1.x);
       return Math.pow(10, last.y + slope * (rf - last.x));
     }
@@ -164,6 +228,7 @@ export function calculateMWCalibrationCurve() {
       if (rf >= standards[i].x && rf <= standards[i + 1].x) {
         const s0    = standards[i];
         const s1    = standards[i + 1];
+        if (s1.x === s0.x) return null;
         const slope = (s1.y - s0.y) / (s1.x - s0.x);
         return Math.pow(10, s0.y + slope * (rf - s0.x));
       }

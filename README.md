@@ -54,7 +54,7 @@ Open http://localhost:8501 in your browser.
 - ?? **Find Lanes** — auto-calculate lane bounding boxes
 - ?? **Density Profiles** — server-computed 1-D densitograms per lane
 - ?? **Peak Detection** — scipy `find_peaks` with adjustable sensitivity/resolution
-- ?? **Wavelength Filtering** — spectral channel weighting (UV-254, Ninhydrin, Iodine, PMA, custom ?)
+- ?? **RGB Channel Projection** — visual channel-weighting presets (UV-254, Ninhydrin, Iodine, PMA, custom); these are not physical monochromator filters.
 - ?? **ROI Crop** — server-side crop with rotation correction
 - ?? **Undo** — Ctrl+Z undo stack (50 levels)
 - ?? **Export** — CSV / PDF report generation

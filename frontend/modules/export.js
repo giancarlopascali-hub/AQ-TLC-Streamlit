@@ -9,6 +9,24 @@ import { state } from './state.js';
 import { generatePeakRowHTML } from './profiles.js';
 import { calculateCalibrationCurve, calculateMWCalibrationCurve } from './analysis.js';
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function safeFileName(value, fallback = 'AQ-TLC_Report') {
+  const cleaned = String(value ?? '')
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
+    .replace(/\s+/g, '_')
+    .replace(/^\.+|\.+$/g, '')
+    .slice(0, 80);
+  return cleaned || fallback;
+}
+
 /**
  * Generates an analytical report for the active lane or all lanes.
  *
@@ -71,8 +89,8 @@ export async function exportReport(type = null) {
     const n = (l.profile || []).length;
     if (n > 1) {
       (l.peaks || []).forEach(pk => {
-        const lb = pk.lb !== undefined ? pk.lb : Math.max(0, pk.idx - 5);
-        const rb = pk.rb !== undefined ? pk.rb : Math.min(n - 1, pk.idx + 5);
+        const lb = pk.area_lb !== undefined ? pk.area_lb : (pk.lb !== undefined ? pk.lb : Math.max(0, pk.idx - 5));
+        const rb = pk.area_rb !== undefined ? pk.area_rb : (pk.rb !== undefined ? pk.rb : Math.min(n - 1, pk.idx + 5));
         const x_pos_rb_flipped = (lb / (n - 1)) * boxHeight;
         const x_pos_lb_flipped = (rb / (n - 1)) * boxHeight;
         let fillStyle, strokeStyle;
@@ -175,7 +193,7 @@ export async function exportReport(type = null) {
         <div class="page-break">
             <div class="header">
                 <div><h1 style="color:#0366d6; margin:0">AQ-TLC Analytical Report <span class="badge">v1.0</span></h1>
-                     <p style="color:#666; margin:5px 0 0 0">Sample: <strong>${l.name || l.id}</strong></p></div>
+                     <p style="color:#666; margin:5px 0 0 0">Sample: <strong>${escapeHtml(l.name || l.id)}</strong></p></div>
                 <div style="text-align:right; color:#888; font-size:0.9rem">${new Date().toLocaleString()}</div>
             </div>
             <div class="stack-wrap">
@@ -192,7 +210,7 @@ export async function exportReport(type = null) {
 
   const fileName = isFullReport
     ? 'AQ-TLC_Full_Report.html'
-    : `AQ-TLC_Report_${lanesToExport[0].name || lanesToExport[0].id}.html`;
+    : `AQ-TLC_Report_${safeFileName(lanesToExport[0].name || lanesToExport[0].id)}.html`;
 
   try {
     const win = window.open('', '_blank');

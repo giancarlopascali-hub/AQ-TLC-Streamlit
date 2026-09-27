@@ -22,7 +22,7 @@
       window.__stRenderQueue = [];
 
       window.addEventListener('message', function (ev) {
-        if (!ev.data || ev.data.type !== 'streamlit:render') return;
+        if (ev.source !== window.parent || !ev.data || ev.data.type !== 'streamlit:render') return;
         var args = ev.data.args || {};
         if (window.__stCallbacks.length > 0) {
           window.__stCallbacks.forEach(function (cb) { cb(args); });
@@ -128,7 +128,7 @@
                style="padding:4px 10px;border-bottom:1px solid rgba(255,255,255,0.05)">
             <div class="sidebar-title"
                  style="margin-bottom:4px;font-size:0.65rem;color:var(--text-dim);display:flex;justify-content:space-between;align-items:center;">
-              <span>WAVELENGTH FILTERING</span>
+              <span>RGB CHANNEL PROJECTION</span>
               <button id="btn-invert-colors" class="mode-toggle-btn"
                       style="font-size:0.58rem;padding:1px 5px;border-radius:3px;border:1px solid var(--border);"
                       title="Invert image colors">&#127912; Invert</button>
@@ -136,10 +136,10 @@
             <div class="wl-preset-grid"
                  style="display:grid;grid-template-columns:repeat(3,1fr);gap:3px;margin-bottom:6px;">
               <button class="wl-preset-btn active" data-wl="full"   id="wl-preset-full"   style="font-size:0.6rem;padding:3px 2px;">Full RGB</button>
-              <button class="wl-preset-btn"        data-wl="540"   id="wl-preset-540"   style="font-size:0.6rem;padding:3px 2px;">UV-254</button>
-              <button class="wl-preset-btn"        data-wl="570"   id="wl-preset-570"   style="font-size:0.6rem;padding:3px 2px;">Ninhydrin</button>
-              <button class="wl-preset-btn"        data-wl="450"   id="wl-preset-450"   style="font-size:0.6rem;padding:3px 2px;">Iodine</button>
-              <button class="wl-preset-btn"        data-wl="650"   id="wl-preset-650"   style="font-size:0.6rem;padding:3px 2px;">PMA</button>
+              <button class="wl-preset-btn"        data-wl="540"   id="wl-preset-540"   style="font-size:0.6rem;padding:3px 2px;" title="RGB projection preset; not a physical UV filter">UV-254 visual</button>
+              <button class="wl-preset-btn"        data-wl="570"   id="wl-preset-570"   style="font-size:0.6rem;padding:3px 2px;" title="RGB projection preset">Ninhydrin visual</button>
+              <button class="wl-preset-btn"        data-wl="450"   id="wl-preset-450"   style="font-size:0.6rem;padding:3px 2px;" title="RGB projection preset">Iodine visual</button>
+              <button class="wl-preset-btn"        data-wl="650"   id="wl-preset-650"   style="font-size:0.6rem;padding:3px 2px;" title="RGB projection preset">PMA visual</button>
               <button class="wl-preset-btn"        data-wl="custom" id="wl-preset-custom" style="font-size:0.6rem;padding:3px 2px;">Custom</button>
             </div>
             <div id="wl-custom-controls" style="display:none;flex-direction:column;gap:4px;margin-top:4px;">
@@ -154,13 +154,6 @@
               </div>
               <input type="range" id="wl-slider" min="380" max="750" value="540"
                      class="rainbow-slider" style="height:10px;width:100%;cursor:pointer;">
-              <div class="slider-header"
-                   style="font-size:0.65rem;display:flex;justify-content:space-between;margin-top:2px;">
-                <label style="color:var(--text-dim);">Bandwidth:</label>
-                <span style="color:#fff;font-size:0.65rem;">&#177;<span id="wl-bw-val">25</span> nm</span>
-              </div>
-              <input type="range" id="wl-bw-slider" min="5" max="50" value="25"
-                     style="height:10px;width:100%;cursor:pointer;">
             </div>
           </div>
 

@@ -80,8 +80,8 @@ _component_func = components.declare_component("aq_tlc", path=_FRONTEND_DIR)
 # ---------------------------------------------------------------------------
 if "pending_response" not in st.session_state:
     st.session_state.pending_response = None
-if "last_req_id" not in st.session_state:
-    st.session_state.last_req_id = None
+if "processed_request_ids" not in st.session_state:
+    st.session_state.processed_request_ids = []
 
 # ---------------------------------------------------------------------------
 # Render the component
@@ -99,34 +99,83 @@ component_value = _component_func(
 # ---------------------------------------------------------------------------
 # Process requests from JS
 # ---------------------------------------------------------------------------
+def _response(action, request_id, ok, data=None, error=None):
+    """Build one versioned response envelope for every component action."""
+    return {
+        "protocol_version": 1,
+        "action": f"{action}_result" if not action.endswith("_result") else action,
+        "request_id": request_id,
+        "ok": ok,
+        "data": data if ok else None,
+        "error": error,
+    }
+
+
 if component_value is not None:
-    action  = component_value.get("action")
-    req_id  = str(component_value.get("request_id", ""))
-    payload = component_value.get("payload", {})
+    action = component_value.get("action") if isinstance(component_value, dict) else None
+    request_id = str(component_value.get("request_id", "")) if isinstance(component_value, dict) else ""
+    payload = component_value.get("payload", {}) if isinstance(component_value, dict) else {}
+    protocol_version = component_value.get("protocol_version", 1) if isinstance(component_value, dict) else None
+    processed = st.session_state.processed_request_ids
 
-    # Deduplicate: only process each request_id once
-    if req_id and req_id != st.session_state.last_req_id:
-        st.session_state.last_req_id = req_id
-
-        if action == "generate_profiles":
-            result = tlc_backend.generate_profiles(payload)
-            st.session_state.pending_response = {
-                "action": "generate_profiles_result",
-                "data":   result,
-            }
-
-        elif action == "crop":
-            result = tlc_backend.crop_image(payload)
-            st.session_state.pending_response = {
-                "action": "crop_result",
-                "data":   result,
-            }
-
+    if protocol_version != 1 or not action or not request_id:
+        invalid_key = f"invalid:{request_id}:{action}"
+        if invalid_key not in processed:
+            st.session_state.pending_response = _response(
+                action or "protocol_error",
+                request_id,
+                False,
+                error={
+                    "code": "INVALID_PROTOCOL",
+                    "message": "The application sent an invalid request.",
+                    "retryable": False,
+                },
+            )
+            processed.append(invalid_key)
+            if len(processed) > 128:
+                del processed[:-128]
+            st.rerun()
         else:
             st.session_state.pending_response = None
+    elif request_id not in processed:
+        if action == "generate_profiles":
+            result = tlc_backend.generate_profiles(payload)
+        elif action == "crop":
+            result = tlc_backend.crop_image(payload)
+        else:
+            result = None
 
+        if result is None:
+            st.session_state.pending_response = _response(
+                action,
+                request_id,
+                False,
+                error={
+                    "code": "UNKNOWN_ACTION",
+                    "message": "That action is not supported.",
+                    "retryable": False,
+                },
+            )
+        elif result.get("error"):
+            st.session_state.pending_response = _response(
+                action,
+                request_id,
+                False,
+                error={
+                    "code": result.get("error_code", "PROCESSING_ERROR"),
+                    "message": result["error"],
+                    "retryable": result.get("error_code") == "PROCESSING_ERROR",
+                },
+            )
+        else:
+            st.session_state.pending_response = _response(action, request_id, True, data=result)
+
+        processed.append(request_id)
+        # Keep idempotency data bounded; action-scoped correlation happens in JS.
+        if len(processed) > 128:
+            del processed[:-128]
         st.rerun()
-
     else:
-        # No new request -- clear stale response so it is not replayed
+        # The component can replay its last value after a rerun.  The reply was
+        # already delivered, so clear it rather than applying it a second time.
         st.session_state.pending_response = None

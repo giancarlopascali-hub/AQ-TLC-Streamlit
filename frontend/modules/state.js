@@ -165,7 +165,7 @@ export const state = {
   /** @type {string} Active wavelength preset button ('full'|'540'|'570'|'450'|'650'|'custom') */
   wavelengthPreset: 'full',
 
-  /** @type {number} Spectral filter bandwidth (+/- nm) */
+  /** @type {number} Reserved for a future validated projection model; not exposed in the UI. */
   wavelengthBandwidth: 25,
 
   /** @type {boolean} True if visual image colors are inverted */

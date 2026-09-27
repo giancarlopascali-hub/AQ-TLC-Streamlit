@@ -20,6 +20,7 @@
 
 import { state, $     } from './state.js';
 import { SMOOTH_SIGMA } from './constants.js';
+import { calculatePeakArea } from './analysis.js';
 import { stSend, stOnRender } from './streamlit_bridge.js';
 
 // -- Circular-dependency bridge -------------------------------------------------
@@ -29,8 +30,9 @@ let _render         = null;
 /** @type {number} Monotonically increasing ID for each outgoing request. */
 let _reqCounter = 0;
 
-/** @type {number} ID of the most recently sent request (to ignore stale responses). */
-let _lastReqId = 0;
+/** Latest request per action. Crop and profile work must not invalidate each other. */
+const _latestRequestIdByAction = new Map();
+let _profileRequestTimer = null;
 
 /**
  * Registers the render callback functions.
@@ -50,6 +52,12 @@ export function registerApiCallbacks(renderProfilesFn, renderFn) {
     if (!resp) return;
 
     if (resp.action === 'generate_profiles_result') {
+      if (resp.protocol_version !== 1) return;
+      if (resp.request_id !== _latestRequestIdByAction.get('generate_profiles')) return;
+      if (!resp.ok) {
+        console.warn('[AQ-TLC Backend Error]', resp.error?.code, resp.error?.message);
+        return;
+      }
       _handleProfilesResponse(resp.data);
     }
     // crop response is handled in workspace.js via its own stOnRender listener
@@ -71,11 +79,24 @@ function _handleProfilesResponse(data) {
     const lane = state.lanes.find(ln => ln.id === result.id);
     if (!lane) return;
 
-    lane.profile = result.profile;
+    // `profile` remains for legacy callers; numerical editing uses the explicit
+    // origin->front normalised profile_analysis field.
+    lane.profile = result.profile || [];
+    lane.profile_display = result.profile_display || [];
+    lane.profile_analysis = result.profile_analysis || [];
 
     // Only replace peaks when explicitly requested or when lane has none yet.
     if (!lane.peaks || lane.peaks.length === 0 || data._detectPeaks) {
       lane.peaks = result.peaks || [];
+    } else {
+      // Parameter changes can refresh the analysis signal without re-running
+      // detection. Preserve user edits but keep every reported area on the
+      // same signal scale as the refreshed backend profile.
+      lane.peaks.forEach(peak => {
+        const left = Number.isInteger(peak.area_lb) ? peak.area_lb : peak.lb;
+        const right = Number.isInteger(peak.area_rb) ? peak.area_rb : peak.rb;
+        peak.area = calculatePeakArea(lane.profile_analysis, left, right);
+      });
     }
   });
 
@@ -104,14 +125,24 @@ function _handleProfilesResponse(data) {
 export function updateDensitograms(detectPeaks = false) {
   if (state.lanes.length === 0 || !state.imgB64) return;
 
+  // Range sliders can emit dozens of events.  Collapse a burst to the latest
+  // request before it enters the Streamlit rerun cycle.
+  if (_profileRequestTimer) clearTimeout(_profileRequestTimer);
+  _profileRequestTimer = setTimeout(() => _sendProfileRequest(detectPeaks), 120);
+}
+
+function _sendProfileRequest(detectPeaks) {
+  if (state.lanes.length === 0 || !state.imgB64) return;
+
   const prominence = parseFloat($('peak-prominence')?.value || 10);
   const distance   = parseInt($('peak-distance')?.value     || 8);
   const threshold  = parseFloat($('peak-threshold')?.value  || 50);
 
-  const reqId = ++_reqCounter;
-  _lastReqId  = reqId;
+  const reqId = `generate_profiles-${++_reqCounter}`;
+  _latestRequestIdByAction.set('generate_profiles', reqId);
 
   stSend({
+    protocol_version: 1,
     action:     'generate_profiles',
     request_id: reqId,
     payload: {

@@ -27,11 +27,68 @@
  */
 
 import { state, $                                          } from './state.js';
-import { calculateRf, calculateCalibrationCurve,
-         calculateMWCalibrationCurve                       } from './analysis.js';
+import { calculateRf, calculatePeakArea, findPeakBounds,
+         calculateCalibrationCurve, calculateMWCalibrationCurve } from './analysis.js';
 import { updateDensitograms                                } from './api.js';
 import { render                                            } from './render.js';
 import { saveState                                         } from './workspace.js';
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/** Return the single canonical origin-to-front signal used for all AUC edits. */
+function getAnalysisProfile(lane) {
+  if (Array.isArray(lane.profile_analysis)) return lane.profile_analysis;
+  if (Array.isArray(lane.profileAnalysis)) return lane.profileAnalysis;
+  // Legacy profile responses are front -> origin and have no normalized data.
+  const legacy = Array.isArray(lane.profile) ? lane.profile.slice().reverse() : [];
+  const min = Math.min(...legacy, 0);
+  const max = Math.max(...legacy, 0);
+  const range = max - min;
+  return range > 1e-9 ? legacy.map(value => (value - min) / range * 100) : legacy.map(() => 0);
+}
+
+function getDisplayProfile(lane) {
+  if (Array.isArray(lane.profile_display)) return lane.profile_display;
+  if (Array.isArray(lane.profileDisplay)) return lane.profileDisplay;
+  return Array.isArray(lane.profile) ? lane.profile.slice().reverse() : [];
+}
+
+function areaLeft(peak) { return Number.isInteger(peak.area_lb) ? peak.area_lb : peak.lb; }
+function areaRight(peak) { return Number.isInteger(peak.area_rb) ? peak.area_rb : peak.rb; }
+
+function ensurePeakBounds(peak, length) {
+  const left = Math.max(0, Math.min(Number.isInteger(areaLeft(peak)) ? areaLeft(peak) : peak.idx - 1, length - 1));
+  const right = Math.max(left + 1, Math.min(Number.isInteger(areaRight(peak)) ? areaRight(peak) : peak.idx + 1, length - 1));
+  peak.area_lb = left;
+  peak.area_rb = right;
+  peak.lb = left; // compatibility with saved pre-contract projects.
+  peak.rb = right;
+  peak.display_lb = Math.max(left, Math.min(Number.isInteger(peak.display_lb) ? peak.display_lb : left, right));
+  peak.display_rb = Math.max(peak.display_lb, Math.min(Number.isInteger(peak.display_rb) ? peak.display_rb : right, right));
+}
+
+function setPeakFromApex(peak, profile, index, threshold) {
+  const bounds = findPeakBounds(profile, index, threshold);
+  peak.idx = index;
+  peak.rf = calculateRf(index, profile.length);
+  peak.height_analysis = profile[index];
+  peak.height = peak.height_analysis;
+  peak.area_lb = bounds.area_lb;
+  peak.area_rb = bounds.area_rb;
+  peak.display_lb = bounds.display_lb;
+  peak.display_rb = bounds.display_rb;
+  peak.lb = bounds.area_lb;
+  peak.rb = bounds.area_rb;
+  peak.area = calculatePeakArea(profile, bounds.area_lb, bounds.area_rb);
+  peak.manual = true;
+}
 
 //                                                                             
 //  MAIN ENTRY - Full panel rebuild
@@ -105,7 +162,7 @@ function buildPanelHeader(l) {
 
   return `
     <div style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center">
-      <input type="text" id="lane-name-input" value="${l.name || 'Lane ' + l.id}"
+      <input type="text" id="lane-name-input" value="${escapeHtml(l.name || 'Lane ' + l.id)}"
              style="background:transparent; border:none; color:white; font-family:Outfit;
                     font-size:1.2rem; font-weight:700; width:150px">
       <div style="display:flex; gap:6px">
@@ -220,7 +277,7 @@ export function generatePeakRowHTML(pk, i, method, opts = {}) {
   // Shared peak name cell
   const nameCell = `
     <td style="color:${nameColor}; font-weight:600">
-      <input type="text" value="${pk.name || '#' + (i + 1)}"
+      <input type="text" value="${escapeHtml(pk.name || '#' + (i + 1))}"
              style="background:transparent; border:none; color:inherit; width:60px"
              ${nameAttr}>
     </td>`;
@@ -450,12 +507,8 @@ export function drawProfileChart(cv, l) {
   cv.height = cv.clientHeight;
 
   const ctx = cv.getContext('2d');
-  const raw = l.profile;
-  if (!raw || raw.length === 0) return;
-
-  // The profile from the server is stored Origin->Front.
-  // Reverse it so index 0 = Front (Rf~1, left of chart), matching the chart axis.
-  const p = raw.slice().reverse();
+  const p = getAnalysisProfile(l);
+  if (p.length === 0) return;
 
   const minV  = Math.min(...p);
   const maxV  = Math.max(...p);
@@ -510,10 +563,12 @@ export function drawProfileChart(cv, l) {
 
   // -- Peak integration windows ----------------------------------------------
   (l.peaks || []).forEach(pk => {
+    ensurePeakBounds(pk, p.length);
     const apexX  = PAD_L + ((pk.idx / (p.length - 1)) * z + off) * plotW;
-    const apexY  = PAD_T + (1 - (pk.height - minV) / range) * plotH;
-    const lb_x   = PAD_L + ((pk.lb  / (p.length - 1)) * z + off) * plotW;
-    const rb_x   = PAD_L + ((pk.rb  / (p.length - 1)) * z + off) * plotW;
+    const apexHeight = Number.isFinite(pk.height_analysis) ? pk.height_analysis : p[pk.idx];
+    const apexY  = PAD_T + (1 - (apexHeight - minV) / range) * plotH;
+    const lb_x   = PAD_L + ((areaLeft(pk)  / (p.length - 1)) * z + off) * plotW;
+    const rb_x   = PAD_L + ((areaRight(pk) / (p.length - 1)) * z + off) * plotW;
 
     // Green for standards ('S'), red for manual/added/modified, yellow for all others
     let color, rgbaFill, rgbaLine;
@@ -534,6 +589,16 @@ export function drawProfileChart(cv, l) {
     // Integration boundary fill
     ctx.fillStyle = rgbaFill;
     ctx.fillRect(lb_x, PAD_T, rb_x - lb_x, plotH);
+
+    // A narrow dashed band can communicate threshold/FWHM presentation
+    // without pretending that it is the AUC interval.
+    const displayLbX = PAD_L + ((pk.display_lb / (p.length - 1)) * z + off) * plotW;
+    const displayRbX = PAD_L + ((pk.display_rb / (p.length - 1)) * z + off) * plotW;
+    ctx.strokeStyle = rgbaLine;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2, 3]);
+    ctx.strokeRect(displayLbX, PAD_T + 2, Math.max(0, displayRbX - displayLbX), plotH - 4);
+    ctx.setLineDash([]);
 
     // Boundary edge lines
     ctx.strokeStyle = rgbaLine;
@@ -604,9 +669,9 @@ function setupChartInteractions(cv, l) {
   const plotW = cv.width  - PAD_L - PAD_R;
   const plotH = cv.height - PAD_T - PAD_B;
 
-  // Reverse the profile so chart x-axis runs Front->Origin (matching Rf direction)
-  const raw = l.profile;
-  const p   = (raw || []).slice().reverse();
+  // All editing uses the backend's canonical origin-to-front normalized signal.
+  const p = getAnalysisProfile(l);
+  if (p.length < 2) return;
 
   /**
    * Converts a canvas-X pixel position to a profile array index.
@@ -663,8 +728,9 @@ function setupChartInteractions(cv, l) {
 
     for (const pk of (l.peaks || [])) {
       const apexX = idxToX(pk.idx);
-      const lb_x  = idxToX(pk.lb);
-      const rb_x  = idxToX(pk.rb);
+      ensurePeakBounds(pk, p.length);
+      const lb_x  = idxToX(areaLeft(pk));
+      const rb_x  = idxToX(areaRight(pk));
 
       if (Math.abs(mx - apexX) < 20)        hitApex  = pk;
       else if (Math.abs(mx - lb_x) < 10)    hitBound = { pk, type: 'lb' };
@@ -696,25 +762,10 @@ function setupChartInteractions(cv, l) {
       if (rf < 0 || rf > 1) return;  // Outside valid Rf range
 
       saveState();
-      const val = p[idx];
-
-      // Walk left and right to find the natural signal valley bounds
-      let lb = idx, rb = idx;
-      while (lb > 0             && p[lb - 1] <= p[lb]) lb--;
-      while (rb < p.length - 1  && p[rb + 1] <= p[rb]) rb++;
-
-      // Determine the integration window using the current Width% threshold
-      const base    = Math.min(p[lb], p[rb]);
-      const thresh  = base + (val - base) * (parseFloat($('peak-threshold')?.value || 50) / 100);
-      let v_lb = lb, v_rb = rb;
-      for (let j = idx; j > lb; j--) if (p[j] < thresh) { v_lb = j; break; }
-      for (let j = idx; j < rb; j++) if (p[j] < thresh) { v_rb = j; break; }
-
-      // Trapezoidal area under the curve, above baseline
-      let area = 0;
-      for (let k = v_lb; k < v_rb; k++) area += (p[k] + p[k + 1]) / 2 - base;
-
-      l.peaks.push({ idx, rf, height: val, area: Math.max(0, area), lb: v_lb, rb: v_rb, manual: true, type: 'N' });
+      const threshold = parseFloat($('peak-threshold')?.value || 50);
+      const peak = { idx, rf, manual: true, type: 'N' };
+      setPeakFromApex(peak, p, idx, threshold);
+      l.peaks.push(peak);
       l.peaks.sort((a, b) => a.idx - b.idx);
       renderProfiles();
       render();
@@ -734,8 +785,9 @@ function setupChartInteractions(cv, l) {
     if (!state.isDraggingBound && !state.isDraggingPeak) {
       let cursor = 'crosshair';
       for (const pk of (l.peaks || [])) {
-        const lb_x  = idxToX(pk.lb);
-        const rb_x  = idxToX(pk.rb);
+        ensurePeakBounds(pk, p.length);
+        const lb_x  = idxToX(areaLeft(pk));
+        const rb_x  = idxToX(areaRight(pk));
         const apexX = idxToX(pk.idx);
         if (Math.abs(mx - lb_x) < 8 || Math.abs(mx - rb_x) < 8) cursor = 'col-resize';
         else if (Math.abs(mx - apexX) < 10)                       cursor = 'pointer';
@@ -746,15 +798,15 @@ function setupChartInteractions(cv, l) {
     // -- Boundary drag -----------------------------------------------------
     if (state.isDraggingBound) {
       const { pk, type } = state.isDraggingBound;
-      if (type === 'lb') pk.lb = Math.min(pk.rb - 1, Math.max(0, idx));
-      else               pk.rb = Math.max(pk.lb + 1, Math.min(p.length - 1, idx));
+      ensurePeakBounds(pk, p.length);
+      if (type === 'lb') pk.area_lb = Math.min(areaRight(pk) - 1, Math.max(0, idx));
+      else               pk.area_rb = Math.max(areaLeft(pk) + 1, Math.min(p.length - 1, idx));
+      pk.lb = pk.area_lb;
+      pk.rb = pk.area_rb;
       pk.manual = true;
-
-      // Recalculate area with the new boundary
-      const base = Math.min(p[pk.lb], p[pk.rb]);
-      let area   = 0;
-      for (let k = pk.lb; k < pk.rb; k++) area += (p[k] + p[k + 1]) / 2 - base;
-      pk.area = Math.max(0, area);
+      pk.display_lb = Math.max(pk.area_lb, Math.min(pk.display_lb, pk.area_rb));
+      pk.display_rb = Math.max(pk.display_lb, Math.min(pk.display_rb, pk.area_rb));
+      pk.area = calculatePeakArea(p, pk.area_lb, pk.area_rb);
 
       // Redraw chart only (not the table) during drag for smooth feedback
       drawProfileChart(cv, l);
@@ -768,27 +820,7 @@ function setupChartInteractions(cv, l) {
     const rf = calculateRf(idx, p.length);
     if (rf < 0 || rf > 1) return;   // Prevent dragging outside valid Rf range
 
-    pk.idx    = idx;
-    pk.rf     = rf;
-    pk.height = p[idx];
-    pk.manual = true;
-
-    // Recalculate the integration window around the new apex position
-    let lb = idx, rb = idx;
-    while (lb > 0            && p[lb - 1] <= p[lb]) lb--;
-    while (rb < p.length - 1 && p[rb + 1] <= p[rb]) rb++;
-    const base   = Math.min(p[lb], p[rb]);
-    const thresh = base + (p[idx] - base) * (parseFloat($('peak-threshold')?.value || 50) / 100);
-    let v_lb = lb, v_rb = rb;
-    for (let j = idx; j > lb; j--) if (p[j] < thresh) { v_lb = j; break; }
-    for (let j = idx; j < rb; j++) if (p[j] < thresh) { v_rb = j; break; }
-    pk.lb = v_lb;
-    pk.rb = v_rb;
-
-    // Trapezoidal area under the new window
-    let area = 0;
-    for (let k = v_lb; k < v_rb; k++) area += (p[k] + p[k + 1]) / 2 - base;
-    pk.area = Math.max(0, area);
+    setPeakFromApex(pk, p, idx, parseFloat($('peak-threshold')?.value || 50));
 
     // Redraw chart only during drag; table updates on mouseup (see events.js)
     drawProfileChart(cv, l);

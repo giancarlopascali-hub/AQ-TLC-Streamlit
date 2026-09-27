@@ -1,308 +1,390 @@
-"""
-tlc_backend.py
-==============
-Pure Python computation for AQ-TLC - no Flask dependency.
-
-All functions take a plain dict (matching the JSON payloads from the
-original Flask endpoints) and return a plain dict.  This module is shared
-between streamlit_app.py (cloud/Streamlit deployment) and can be imported
-by any other runner without bringing in Flask.
-
-Functions
----------
-generate_profiles(data)   - density profiles + peak detection
-crop_image(data)          - ROI crop with rotation correction
-"""
+"""Pure, bounded image-processing functions for the AQ-TLC Streamlit host."""
 
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import io
+import math
 import traceback
+from collections import OrderedDict
+from typing import Any
 
 import cv2
 import numpy as np
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 
-# NumPy 2.0 compatibility: np.trapz was renamed to np.trapezoid
+# NumPy 2 compatibility. Keep the implementation in one place so automated
+# and manual integrations can be compared against the same definition.
 _trapz = getattr(np, "trapezoid", getattr(np, "trapz", None))
 
+MAX_ENCODED_IMAGE_BYTES = 12 * 1024 * 1024
+MAX_IMAGE_DIMENSION = 4096
+MAX_IMAGE_PIXELS = 12_000_000
+MAX_LANES = 64
+MAX_CACHE_ENTRIES = 32
+MAX_CACHE_BYTES = 64 * 1024 * 1024
 
-# -- Image cache ---------------------------------------------------------------
-
-_cache: dict = {}
-_CACHE_MAX = 40
+_cache: OrderedDict[str, np.ndarray] = OrderedDict()
+_cache_bytes = 0
 
 
-def _cache_put(key: str, value):
+class InputValidationError(ValueError):
+    """A safe, user-actionable request validation failure."""
+
+
+def _cache_put(key: str, value: np.ndarray) -> None:
+    """Insert an array into a small byte-bounded LRU cache."""
+    global _cache_bytes
+    size = int(value.nbytes)
+    if size > MAX_CACHE_BYTES:
+        return
+    if key in _cache:
+        _cache_bytes -= int(_cache.pop(key).nbytes)
     _cache[key] = value
-    if len(_cache) > _CACHE_MAX:
-        del _cache[next(iter(_cache))]
+    _cache_bytes += size
+    while _cache and (len(_cache) > MAX_CACHE_ENTRIES or _cache_bytes > MAX_CACHE_BYTES):
+        _, evicted = _cache.popitem(last=False)
+        _cache_bytes -= int(evicted.nbytes)
+
+
+def _cache_get(key: str) -> np.ndarray | None:
+    value = _cache.get(key)
+    if value is not None:
+        _cache.move_to_end(key)
+    return value
+
+
+def _decode_data_url(value: Any) -> bytes:
+    if not isinstance(value, str) or not value:
+        raise InputValidationError("An image is required.")
+    encoded = value.split(",", 1)[-1]
+    if len(encoded) > (MAX_ENCODED_IMAGE_BYTES * 4 // 3) + 8:
+        raise InputValidationError("The selected image is too large.")
+    try:
+        raw = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise InputValidationError("The selected image is not valid base64 data.") from exc
+    if not raw or len(raw) > MAX_ENCODED_IMAGE_BYTES:
+        raise InputValidationError("The selected image is too large or empty.")
+    return raw
 
 
 def load_image(b64str: str) -> np.ndarray:
-    """Decode base64 image ? uint8 BGR array, cached by MD5."""
-    key = hashlib.md5(b64str.encode()).hexdigest() + "_color"
-    if key not in _cache:
-        raw = base64.b64decode(b64str.split(",")[-1])
-        pil = Image.open(io.BytesIO(raw)).convert("RGB")
-        _cache_put(key, cv2.cvtColor(np.array(pil), cv2.COLOR_RGB2BGR))
-    return _cache[key]
+    """Decode a bounded data URL to a uint8 BGR image, using an LRU cache."""
+    key = hashlib.sha256(b64str.encode("utf-8")).hexdigest() + "_color"
+    cached = _cache_get(key)
+    if cached is not None:
+        return cached
+
+    raw = _decode_data_url(b64str)
+    try:
+        with Image.open(io.BytesIO(raw)) as probe:
+            probe.verify()
+        with Image.open(io.BytesIO(raw)) as source:
+            width, height = source.size
+            if width < 1 or height < 1 or width > MAX_IMAGE_DIMENSION or height > MAX_IMAGE_DIMENSION:
+                raise InputValidationError("Image dimensions exceed the supported limit.")
+            if width * height > MAX_IMAGE_PIXELS:
+                raise InputValidationError("Image resolution exceeds the supported limit.")
+            source.load()
+            rgb = np.array(source.convert("RGB"))
+    except InputValidationError:
+        raise
+    except (UnidentifiedImageError, Image.DecompressionBombError, OSError, ValueError) as exc:
+        raise InputValidationError("The selected image could not be decoded.") from exc
+
+    value = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+    _cache_put(key, value)
+    return value
 
 
-def wavelength_to_rgb(wavelength: float):
-    """Convert wavelength (nm, 380-750) to RGB tuple in [0, 1]."""
+def wavelength_to_rgb(wavelength: float) -> tuple[float, float, float]:
+    """Approximate RGB-channel weights for a visible-light wavelength label."""
     if 380 <= wavelength < 440:
-        r = -(wavelength - 440) / (440 - 380); g = 0.0; b = 1.0
+        r, g, b = -(wavelength - 440) / 60, 0.0, 1.0
     elif 440 <= wavelength < 490:
-        r = 0.0; g = (wavelength - 440) / (490 - 440); b = 1.0
+        r, g, b = 0.0, (wavelength - 440) / 50, 1.0
     elif 490 <= wavelength < 510:
-        r = 0.0; g = 1.0; b = -(wavelength - 510) / (510 - 490)
+        r, g, b = 0.0, 1.0, -(wavelength - 510) / 20
     elif 510 <= wavelength < 580:
-        r = (wavelength - 510) / (580 - 510); g = 1.0; b = 0.0
+        r, g, b = (wavelength - 510) / 70, 1.0, 0.0
     elif 580 <= wavelength < 645:
-        r = 1.0; g = -(wavelength - 645) / (645 - 580); b = 0.0
+        r, g, b = 1.0, -(wavelength - 645) / 65, 0.0
     elif 645 <= wavelength <= 750:
-        r = 1.0; g = 0.0; b = 0.0
+        r, g, b = 1.0, 0.0, 0.0
     else:
         r = g = b = 0.0
 
     if 380 <= wavelength < 420:
-        factor = 0.3 + 0.7 * (wavelength - 380) / (420 - 380)
+        factor = 0.3 + 0.7 * (wavelength - 380) / 40
     elif 420 <= wavelength <= 700:
         factor = 1.0
     elif 700 < wavelength <= 750:
-        factor = 0.3 + 0.7 * (750 - wavelength) / (750 - 700)
+        factor = 0.3 + 0.7 * (750 - wavelength) / 50
     else:
         factor = 0.0
-
     return r * factor, g * factor, b * factor
 
 
-def load_gray(b64str: str, target_wavelength=None) -> np.ndarray:
-    """Decode base64 image ? uint8 grayscale, optionally spectrally weighted."""
-    if target_wavelength is not None and str(target_wavelength).strip() not in ("", "full", "none", "null"):
+def load_gray(b64str: str, target_wavelength: Any = None) -> np.ndarray:
+    """Load grayscale or a clearly-labelled RGB-channel projection."""
+    source_key = hashlib.sha256(b64str.encode("utf-8")).hexdigest()
+    if target_wavelength is not None and str(target_wavelength).strip().lower() not in {"", "full", "none", "null"}:
         try:
-            wl = float(target_wavelength)
-            key = hashlib.md5(b64str.encode()).hexdigest() + f"_gray_wl_{wl:.1f}"
-            if key not in _cache:
-                color = load_image(b64str)
-                r, g, b = wavelength_to_rgb(wl)
-                s = r + g + b
-                w_r, w_g, w_b = (r / s, g / s, b / s) if s > 0 else (0.299, 0.587, 0.114)
-                gray_f = (color[:, :, 0].astype(np.float32) * w_b +
-                          color[:, :, 1].astype(np.float32) * w_g +
-                          color[:, :, 2].astype(np.float32) * w_r)
-                _cache_put(key, np.clip(gray_f, 0, 255).astype(np.uint8))
-            return _cache[key]
-        except Exception as e:
-            print(f"[AQ-TLC] Wavelength filter error {target_wavelength}: {e}", flush=True)
-
-    key = hashlib.md5(b64str.encode()).hexdigest() + "_gray"
-    if key not in _cache:
+            wavelength = float(target_wavelength)
+        except (TypeError, ValueError) as exc:
+            raise InputValidationError("RGB projection wavelength must be numeric.") from exc
+        if not 380 <= wavelength <= 750:
+            raise InputValidationError("RGB projection wavelength must be between 380 and 750 nm.")
+        key = f"{source_key}_gray_wl_{wavelength:.1f}"
+        cached = _cache_get(key)
+        if cached is not None:
+            return cached
         color = load_image(b64str)
-        _cache_put(key, cv2.cvtColor(color, cv2.COLOR_BGR2GRAY))
-    return _cache[key]
+        r, g, b = wavelength_to_rgb(wavelength)
+        total = r + g + b
+        w_r, w_g, w_b = (r / total, g / total, b / total) if total > 0 else (0.299, 0.587, 0.114)
+        gray = (
+            color[:, :, 0].astype(np.float32) * w_b
+            + color[:, :, 1].astype(np.float32) * w_g
+            + color[:, :, 2].astype(np.float32) * w_r
+        )
+        value = np.clip(gray, 0, 255).astype(np.uint8)
+        _cache_put(key, value)
+        return value
+
+    key = f"{source_key}_gray"
+    cached = _cache_get(key)
+    if cached is not None:
+        return cached
+    value = cv2.cvtColor(load_image(b64str), cv2.COLOR_BGR2GRAY)
+    _cache_put(key, value)
+    return value
 
 
-def apply_bg_norm(gray: np.ndarray, bg_rect: list | None = None):
-    """Normalise image based on a reference background rect [x, y, w, h]."""
-    gray_f = gray.astype(np.float64) / 255.0
-    bg_val = 1.0
-
-    if bg_rect and len(bg_rect) == 4:
-        x, y, w, h = [int(v) for v in bg_rect]
-        H, W = gray.shape
-        x0, y0 = max(0, x), max(0, y)
-        x1, y1 = min(W, x + w), min(H, y + h)
-        if x1 > x0 and y1 > y0:
-            roi = gray_f[y0:y1, x0:x1]
-            bg_val = float(np.median(roi))
-            return np.clip(gray_f / (bg_val + 1e-6), 0, 1.0), bg_val
-
-    return gray_f, bg_val
-
-
-# -- Crop ----------------------------------------------------------------------
-
-def crop_image(data: dict) -> dict:
-    """
-    Apply rotation + ROI crop.
-
-    Parameters
-    ----------
-    data : dict
-        image   : base64 data-URL string
-        x, y, w, h : crop rect in image coordinates
-        angle   : rotation in radians (applied before cropping)
-
-    Returns
-    -------
-    dict with 'image' key (base64 JPEG) or 'error' key on failure.
-    """
+def _finite_number(value: Any, field: str, minimum: float | None = None, maximum: float | None = None) -> float:
     try:
-        img = load_image(data["image"])
-        x, y, w, h = int(data["x"]), int(data["y"]), int(data["w"]), int(data["h"])
-        angle = data.get("angle", 0)
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise InputValidationError(f"{field} must be numeric.") from exc
+    if not math.isfinite(number):
+        raise InputValidationError(f"{field} must be finite.")
+    if minimum is not None and number < minimum:
+        raise InputValidationError(f"{field} is below the supported range.")
+    if maximum is not None and number > maximum:
+        raise InputValidationError(f"{field} is above the supported range.")
+    return number
 
-        if angle != 0:
-            M = cv2.getRotationMatrix2D(
-                (img.shape[1] / 2, img.shape[0] / 2), np.degrees(-angle), 1.0
-            )
-            img = cv2.warpAffine(img, M, (img.shape[1], img.shape[0]))
 
-        x1, y1 = min(x, x + w), min(y, y + h)
-        x2, y2 = max(x, x + w), max(y, y + h)
-        crop = img[max(0, y1):min(img.shape[0], y2), max(0, x1):min(img.shape[1], x2)]
+def calculate_peak_area(profile: np.ndarray | list[float], lb: int, rb: int) -> float:
+    """Integrate the origin-to-front normalized signal above its endpoint baseline."""
+    signal = np.asarray(profile, dtype=float)
+    if signal.ndim != 1 or signal.size < 2 or not np.all(np.isfinite(signal)):
+        return 0.0
+    left = max(0, min(int(round(lb)), signal.size - 1))
+    right = max(0, min(int(round(rb)), signal.size - 1))
+    if right <= left:
+        return 0.0
+    baseline = min(float(signal[left]), float(signal[right]))
+    clipped = np.clip(signal[left : right + 1] - baseline, 0, None)
+    return float(_trapz(clipped))
+
+
+def calculate_rf(idx: int, length: int) -> float:
+    if length < 2:
+        return 0.0
+    y_origin_line = 1.05 / 1.10
+    y_front_line = 0.05 / 1.10
+    y_fraction = 1.0 - (float(idx) / (length - 1))
+    return (y_origin_line - y_fraction) / (y_origin_line - y_front_line)
+
+
+def _display_bounds(signal: np.ndarray, idx: int, area_lb: int, area_rb: int, threshold: float) -> tuple[int, int]:
+    """Derive a threshold display band within, but distinct from, AUC bounds."""
+    baseline = min(float(signal[area_lb]), float(signal[area_rb]))
+    cutoff = baseline + (float(signal[idx]) - baseline) * threshold
+    left, right = area_lb, area_rb
+    for pos in range(idx, area_lb, -1):
+        if signal[pos] < cutoff:
+            left = pos
+            break
+    for pos in range(idx, area_rb):
+        if signal[pos] < cutoff:
+            right = pos
+            break
+    if right - left < 2:
+        left, right = max(area_lb, idx - 2), min(area_rb, idx + 2)
+    return int(left), int(right)
+
+
+def _validated_lanes(value: Any, width: int, height: int) -> list[dict[str, float | int]]:
+    if not isinstance(value, list):
+        raise InputValidationError("lanes must be a list.")
+    if len(value) > MAX_LANES:
+        raise InputValidationError("Too many lanes were requested.")
+    lanes: list[dict[str, float | int]] = []
+    for index, lane in enumerate(value):
+        if not isinstance(lane, dict):
+            raise InputValidationError("Each lane must be an object.")
+        lane_id = lane.get("id", index + 1)
+        cx = _finite_number(lane.get("cx"), "lane centre x", 0, width)
+        cy = _finite_number(lane.get("cy"), "lane centre y", 0, height)
+        lane_width = _finite_number(lane.get("w"), "lane width", 1, width)
+        lane_height = _finite_number(lane.get("h"), "lane height", 1, height)
+        angle = _finite_number(lane.get("angle", 0), "lane angle", -2 * math.pi, 2 * math.pi)
+        lanes.append({"id": lane_id, "cx": cx, "cy": cy, "w": lane_width, "h": lane_height, "angle": angle})
+    return lanes
+
+
+def _result_error(exc: Exception) -> dict[str, str]:
+    if isinstance(exc, InputValidationError):
+        return {"error": str(exc), "error_code": "INVALID_INPUT"}
+    traceback.print_exc()
+    return {"error": "The analysis could not be completed.", "error_code": "PROCESSING_ERROR"}
+
+
+def crop_image(data: dict[str, Any]) -> dict[str, Any]:
+    """Apply rotation and crop, returning a bounded JPEG data URL."""
+    try:
+        if not isinstance(data, dict):
+            raise InputValidationError("Crop data must be an object.")
+        image = load_image(data.get("image"))
+        height, width = image.shape[:2]
+        x = _finite_number(data.get("x"), "crop x", -width, 2 * width)
+        y = _finite_number(data.get("y"), "crop y", -height, 2 * height)
+        crop_width = _finite_number(data.get("w"), "crop width", -width, 2 * width)
+        crop_height = _finite_number(data.get("h"), "crop height", -height, 2 * height)
+        angle = _finite_number(data.get("angle", 0), "crop angle", -2 * math.pi, 2 * math.pi)
+
+        if angle:
+            matrix = cv2.getRotationMatrix2D((width / 2, height / 2), np.degrees(-angle), 1.0)
+            image = cv2.warpAffine(image, matrix, (width, height))
+
+        x1, x2 = sorted((int(round(x)), int(round(x + crop_width))))
+        y1, y2 = sorted((int(round(y)), int(round(y + crop_height))))
+        crop = image[max(0, y1) : min(height, y2), max(0, x1) : min(width, x2)]
         if crop.size == 0:
-            return {"error": "Invalid crop region"}
+            raise InputValidationError("The crop region is outside the image.")
+        ok, buffer = cv2.imencode(".jpg", crop, [cv2.IMWRITE_JPEG_QUALITY, 90])
+        if not ok:
+            raise RuntimeError("Could not encode crop.")
+        return {"image": "data:image/jpeg;base64," + base64.b64encode(buffer).decode("ascii")}
+    except Exception as exc:
+        return _result_error(exc)
 
-        _, buffer = cv2.imencode(".jpg", crop, [cv2.IMWRITE_JPEG_QUALITY, 90])
-        return {"image": "data:image/jpeg;base64," + base64.b64encode(buffer).decode()}
-    except Exception as e:
-        traceback.print_exc()
-        return {"error": str(e)}
 
-
-# -- Profile Generation --------------------------------------------------------
-
-def generate_profiles(data: dict) -> dict:
-    """
-    Compute 1-D density profiles and (optionally) detect peaks for each lane.
-
-    Parameters
-    ----------
-    data : dict  - mirrors the JSON body of POST /generate_profiles
-
-    Returns
-    -------
-    dict with 'results' key (list of per-lane dicts) or 'error' key on failure.
-    """
+def generate_profiles(data: dict[str, Any]) -> dict[str, Any]:
+    """Generate bounded, origin-to-front display/analysis profiles and peaks."""
     try:
-        from scipy.signal import find_peaks
         from scipy.ndimage import gaussian_filter1d, median_filter
+        from scipy.signal import find_peaks
 
-        target_wl    = data.get("target_wavelength")
-        invert_colors = data.get("invert_colors", False)
-        img = load_gray(data["image"], target_wavelength=target_wl)
-        if invert_colors:
-            img = 255 - img
+        if not isinstance(data, dict):
+            raise InputValidationError("Analysis data must be an object.")
+        image = load_gray(data.get("image"), data.get("target_wavelength"))
+        if bool(data.get("invert_colors", False)):
+            image = 255 - image
+        image_height, image_width = image.shape[:2]
+        lanes = _validated_lanes(data.get("lanes", []), image_width, image_height)
 
-        lanes              = data.get("lanes", [])
-        detect_peaks_flag  = data.get("peak_detection", False)
-        peak_prominence    = 81.0 - float(data.get("peak_prominence", 10))
-        peak_distance      = int(data.get("peak_distance", 5))
-        smooth_sigma       = float(data.get("smooth_sigma", 1.5))
-        int_threshold      = float(data.get("peak_threshold", 50)) / 100.0
-        polarity_mode      = data.get("polarity_mode", "default")
+        detect_peaks = bool(data.get("peak_detection", False))
+        prominence_input = _finite_number(data.get("peak_prominence", 10), "peak prominence", 0, 100)
+        peak_prominence = 81.0 - prominence_input
+        peak_distance = max(1, int(round(_finite_number(data.get("peak_distance", 5), "peak distance", 1, 10000))))
+        smooth_sigma = _finite_number(data.get("smooth_sigma", 1.5), "smoothing", 0, 100)
+        threshold = _finite_number(data.get("peak_threshold", 50), "peak threshold", 0, 100) / 100.0
+        polarity = data.get("polarity_mode", "default")
+        if polarity not in {"default", "dark", "bright"}:
+            raise InputValidationError("Unsupported polarity mode.")
 
         results = []
         for lane in lanes:
-            cx, cy, lw, lh, angle = (
-                lane["cx"], lane["cy"], lane["w"], lane["h"], lane.get("angle", 0)
+            cx, cy, lane_width, lane_height, angle = (
+                float(lane["cx"]), float(lane["cy"]), float(lane["w"]), float(lane["h"]), float(lane["angle"])
             )
-
-            M = cv2.getRotationMatrix2D((cx, cy), np.degrees(-angle), 1.0)
-            straight = cv2.warpAffine(img, M, (img.shape[1], img.shape[0]))
-            y1 = max(0, int(cy - lh / 2))
-            y2 = min(straight.shape[0], int(cy + lh / 2))
-            x1 = max(0, int(cx - lw / 2))
-            x2 = min(straight.shape[1], int(cx + lw / 2))
+            rotation = cv2.getRotationMatrix2D((cx, cy), np.degrees(-angle), 1.0)
+            straight = cv2.warpAffine(image, rotation, (image_width, image_height))
+            y1, y2 = max(0, int(cy - lane_height / 2)), min(image_height, int(cy + lane_height / 2))
+            x1, x2 = max(0, int(cx - lane_width / 2)), min(image_width, int(cx + lane_width / 2))
             roi = straight[y1:y2, x1:x2]
             if roi.size == 0:
-                results.append({"id": lane["id"], "profile": [], "peaks": []})
+                results.append({"id": lane["id"], "profile": [], "profile_display": [], "profile_analysis": [], "peaks": []})
                 continue
 
             raw_signal = np.mean(roi, axis=1)
-
-            if polarity_mode == "dark":
+            if polarity == "dark":
                 profile = 255.0 - raw_signal
-            elif polarity_mode == "bright":
+            elif polarity == "bright":
                 profile = raw_signal
             else:
-                if np.mean(roi) < np.median(roi):
-                    profile = 255.0 - raw_signal
-                else:
-                    profile = raw_signal
+                profile = 255.0 - raw_signal if np.mean(roi) < np.median(roi) else raw_signal
 
-            # Rolling-median baseline subtraction
-            win = max(21, int(len(profile) * 0.50))
-            if win % 2 == 0:
-                win += 1
-            background = median_filter(profile, size=win)
+            window = max(21, int(len(profile) * 0.50))
+            window = min(window if window % 2 else window + 1, len(profile) if len(profile) % 2 else max(1, len(profile) - 1))
+            background = median_filter(profile, size=max(1, window))
             profile = np.clip(profile - background, 0, None)
             profile = profile - profile.min()
-
-            if smooth_sigma > 0:
+            if smooth_sigma > 0 and len(profile) > 1:
                 profile = gaussian_filter1d(profile, sigma=smooth_sigma)
 
-            peaks_out = []
-            if detect_peaks_flag and len(profile) > 4:
-                p_rev = profile[::-1].copy()
-                n = len(p_rev)
-
-                p_min, p_max = p_rev.min(), p_rev.max()
-                p_range = p_max - p_min
-                if p_range < 1e-6:
-                    results.append({"id": lane["id"], "profile": profile.tolist(), "peaks": []})
-                    continue
-                p_norm = (p_rev - p_min) / p_range * 100.0
-
-                peak_indices, properties = find_peaks(
-                    p_norm,
-                    prominence=peak_prominence,
-                    distance=max(1, peak_distance),
+            # Profile extraction starts at the solvent front. Public arrays run
+            # origin -> front for every client and all numerical operations.
+            profile_display = profile[::-1].copy()
+            if profile_display.size:
+                profile_range = float(profile_display.max() - profile_display.min())
+                profile_analysis = (
+                    (profile_display - profile_display.min()) / profile_range * 100.0
+                    if profile_range >= 1e-6
+                    else np.zeros_like(profile_display)
                 )
+            else:
+                profile_analysis = np.array([], dtype=float)
 
-                y_origin_line = 1.05 / 1.10
-                y_front_line  = 0.05 / 1.10
-
-                for i, idx in enumerate(peak_indices):
-                    n = len(p_rev)
-                    y_fract = 1.0 - (float(idx) / (n - 1)) if n > 1 else 0.0
-                    rf = (y_origin_line - y_fract) / (y_origin_line - y_front_line)
-                    if rf < 0.0 or rf > 1.0:
+            peaks: list[dict[str, Any]] = []
+            if detect_peaks and len(profile_analysis) > 4 and float(profile_analysis.max()) > 0:
+                indices, properties = find_peaks(profile_analysis, prominence=peak_prominence, distance=max(1, peak_distance))
+                for peak_number, idx in enumerate(indices):
+                    rf = calculate_rf(int(idx), len(profile_analysis))
+                    if not 0.0 <= rf <= 1.0:
                         continue
-
-                    lb, rb = int(properties["left_bases"][i]), int(properties["right_bases"][i])
-
-                    local_peak_val = p_norm[idx]
-                    local_base = min(p_norm[lb], p_norm[rb])
-                    threshold_val = local_base + (local_peak_val - local_base) * int_threshold
-
-                    v_lb, v_rb = lb, rb
-                    for j in range(idx, lb, -1):
-                        if p_norm[j] < threshold_val:
-                            v_lb = j
-                            break
-                    for j in range(idx, rb):
-                        if p_norm[j] < threshold_val:
-                            v_rb = j
-                            break
-
-                    if (v_rb - v_lb) < 2:
-                        v_lb, v_rb = max(0, idx - 2), min(n - 1, idx + 2)
-
-                    base_val = min(p_norm[lb], p_norm[rb])
-                    area = float(_trapz(np.clip(p_norm[lb:rb + 1] - base_val, 0, None)))
-
-                    peaks_out.append({
-                        "idx":    int(idx),
-                        "rf":     round(rf, 3),
-                        "height": round(float(p_rev[idx]), 2),
-                        "area":   round(area, 2),
-                        "lb":     int(v_lb),
-                        "rb":     int(v_rb),
+                    area_lb = int(properties["left_bases"][peak_number])
+                    area_rb = int(properties["right_bases"][peak_number])
+                    display_lb, display_rb = _display_bounds(profile_analysis, int(idx), area_lb, area_rb, threshold)
+                    area = calculate_peak_area(profile_analysis, area_lb, area_rb)
+                    peaks.append({
+                        "idx": int(idx),
+                        "rf": round(rf, 3),
+                        "height": round(float(profile_display[idx]), 2),
+                        "height_display": round(float(profile_display[idx]), 2),
+                        "height_analysis": round(float(profile_analysis[idx]), 4),
+                        "area": round(area, 4),
+                        "area_lb": area_lb,
+                        "area_rb": area_rb,
+                        "display_lb": display_lb,
+                        "display_rb": display_rb,
+                        # Backward-compatible aliases now denote AUC bounds.
+                        "lb": area_lb,
+                        "rb": area_rb,
+                        "manual": False,
+                        "type": "N",
                     })
 
             results.append({
-                "id":      lane["id"],
+                "id": lane["id"],
+                # Legacy profile remains front -> origin for older clients.
                 "profile": profile.tolist(),
-                "peaks":   peaks_out,
+                "profile_display": profile_display.tolist(),
+                "profile_analysis": profile_analysis.tolist(),
+                "peaks": peaks,
             })
 
-        return {"results": results, "_detectPeaks": detect_peaks_flag}
-    except Exception as e:
-        traceback.print_exc()
-        return {"error": str(e)}
+        return {
+            "results": results,
+            "_detectPeaks": detect_peaks,
+            "profile_direction": "origin_to_front",
+            "analysis_signal": "normalized_0_to_100",
+        }
+    except Exception as exc:
+        return _result_error(exc)

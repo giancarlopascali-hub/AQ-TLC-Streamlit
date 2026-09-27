@@ -22,11 +22,17 @@ import { stSend, stOnRender, stSetHeight } from './streamlit_bridge.js';
 
 // -- Crop response counter -----------------------------------------------------
 let _cropReqCounter = 0;
+let _latestCropRequestId = null;
 
 // Register a listener for crop responses (shared render event).
 stOnRender(args => {
   const resp = args.response;
-  if (!resp || resp.action !== 'crop_result') return;
+  if (!resp || resp.action !== 'crop_result' || resp.protocol_version !== 1) return;
+  if (resp.request_id !== _latestCropRequestId) return;
+  if (!resp.ok) {
+    console.warn('[AQ-TLC Crop Error]', resp.error?.code, resp.error?.message);
+    return;
+  }
 
   const data = resp.data;
   if (data && data.image) {
@@ -226,9 +232,12 @@ export async function applyCrop() {
   const r = state.roiRect;
   if (!r) return;
 
+  const requestId = `crop-${++_cropReqCounter}`;
+  _latestCropRequestId = requestId;
   stSend({
+    protocol_version: 1,
     action:     'crop',
-    request_id: ++_cropReqCounter,
+    request_id: requestId,
     payload: {
       image: state.imgB64,
       x: r.x, y: r.y, w: r.w, h: r.h,
