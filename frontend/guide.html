@@ -1,264 +1,214 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AQ-TLC Quick Guide</title>
-  <link rel="icon" type="image/x-icon" href="favicon.ico">
-  <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Outfit:wght@500;700&display=swap"
-    rel="stylesheet">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#010409">
+  <title>AQ-TLC Desktop Quick Guide</title>
+  <link rel="icon" href="favicon.ico" type="image/x-icon">
   <style>
-    body {
-      font-family: 'Inter', sans-serif;
-      background: #010409;
-      color: #c9d1d9;
-      padding: 40px;
-      margin: 0;
-      line-height: 1.6;
+    :root {
+      color-scheme: dark;
+      --bg: #010409;
+      --panel: #0d1117;
+      --panel-2: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #9da7b3;
+      --accent: #ffc107;
+      --accent-soft: rgba(255, 193, 7, .1);
+      --blue: #58a6ff;
+      --orange: #f0883e;
+      --red: #ff7b72;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
 
-    .container {
-      max-width: 800px;
-      margin: 0 auto;
-      background: #0d1117;
-      padding: 40px;
-      border-radius: 12px;
-      border: 1px solid #30363d;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; background: var(--bg); color: var(--text); line-height: 1.62; }
+    a { color: var(--accent); }
+    strong { color: #fff; }
+    kbd { display: inline-block; min-width: 1.65rem; padding: .08rem .38rem; border: 1px solid #49515b; border-bottom-width: 2px; border-radius: 5px; background: #21262d; color: #fff; font: .78rem ui-monospace, SFMono-Regular, Menlo, monospace; text-align: center; }
+
+    .page { width: min(980px, 100%); margin: 0 auto; padding: 1rem 1rem 4rem; }
+    .hero {
+      margin: .5rem 0 1rem;
+      padding: clamp(1.5rem, 6vw, 3.2rem);
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      background:
+        radial-gradient(circle at 94% 4%, rgba(255, 193, 7, .2), transparent 30%),
+        radial-gradient(circle at 5% 100%, rgba(88, 166, 255, .15), transparent 34%),
+        var(--panel);
+    }
+    .eyebrow { margin: 0 0 .35rem; color: var(--accent); font-size: .78rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+    h1 { max-width: 720px; margin: 0; font-size: clamp(2rem, 8vw, 4rem); line-height: 1.02; letter-spacing: -.045em; }
+    .lede { max-width: 750px; margin: 1rem 0 0; color: #c6d0da; font-size: clamp(1rem, 2.2vw, 1.15rem); }
+    .platform { display: inline-flex; align-items: center; margin-top: 1.2rem; padding: .42rem .7rem; border: 1px solid #806813; border-radius: 999px; background: rgba(255, 193, 7, .08); color: #ffe189; font-size: .8rem; font-weight: 700; }
+
+    .quick-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .55rem; margin: 1rem 0; }
+    .quick-nav a { padding: .75rem .85rem; border: 1px solid var(--border); border-radius: 10px; background: var(--panel); color: var(--text); font-size: .86rem; font-weight: 700; text-decoration: none; }
+
+    section { margin-top: 1rem; padding: clamp(1.1rem, 3vw, 1.8rem); border: 1px solid var(--border); border-radius: 16px; background: var(--panel); }
+    h2 { margin: 0 0 .8rem; font-size: clamp(1.25rem, 3vw, 1.65rem); line-height: 1.2; letter-spacing: -.02em; }
+    h3 { margin: 1.35rem 0 .35rem; font-size: 1rem; color: #fff; }
+    p { margin: .5rem 0; }
+    ol, ul { margin: .65rem 0 0; padding-left: 1.25rem; }
+    li { margin: .55rem 0; padding-left: .15rem; }
+
+    .steps { display: grid; gap: .7rem; margin-top: 1rem; counter-reset: steps; }
+    .step { position: relative; padding: .95rem .9rem .95rem 3.45rem; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-2); counter-increment: steps; }
+    .step::before { content: counter(steps); position: absolute; top: .85rem; left: .85rem; display: grid; width: 1.8rem; height: 1.8rem; place-items: center; border-radius: 50%; background: var(--accent); color: #1b1400; font-size: .8rem; font-weight: 900; }
+    .step b { display: block; margin-bottom: .15rem; color: #fff; }
+
+    .callout { margin: 1rem 0 0; padding: .85rem 1rem; border-left: 3px solid var(--accent); border-radius: 0 9px 9px 0; background: var(--accent-soft); color: #d7dce2; }
+    .callout.blue { border-left-color: var(--blue); background: rgba(88, 166, 255, .1); }
+    .callout.warning { border-left-color: var(--orange); background: rgba(240, 136, 62, .1); }
+    .callout.danger { border-left-color: var(--red); background: rgba(255, 123, 114, .09); }
+
+    .tool-grid, .mode-grid { display: grid; gap: .7rem; margin-top: .8rem; }
+    .tool, .mode { padding: .9rem; border: 1px solid var(--border); border-radius: 11px; background: var(--panel-2); }
+    .tool h3, .mode h3 { margin: 0 0 .3rem; }
+    .tool p, .mode p { margin: 0; color: #c4ced8; }
+
+    .legend { display: grid; gap: .55rem; margin-top: .8rem; }
+    .legend-item { display: grid; grid-template-columns: 13px 1fr; gap: .65rem; align-items: start; }
+    .dot { width: 11px; height: 11px; margin-top: .42rem; border-radius: 50%; }
+    .dot.gold { background: #ffd700; }
+    .dot.red { background: #e34c26; }
+    .dot.green { background: #2ea043; }
+
+    .footer { padding: 1.5rem .25rem 0; color: var(--muted); font-size: .82rem; text-align: center; }
+
+    @media (min-width: 760px) {
+      .page { padding: 2rem 1.5rem 5rem; }
+      .quick-nav { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .steps, .tool-grid, .mode-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
 
-    h1 {
-      color: #58a6ff;
-      font-family: 'Outfit', sans-serif;
-      border-bottom: 2px solid #30363d;
-      padding-bottom: 10px;
-      margin-top: 0;
-    }
-
-    h2 {
-      color: #ffc107;
-      font-family: 'Outfit', sans-serif;
-      margin-top: 40px;
-      border-bottom: 1px solid #30363d;
-      padding-bottom: 5px;
-      font-size: 1.4rem;
-    }
-
-    h3 {
-      color: #e6edf3;
-      font-family: 'Outfit', sans-serif;
-    }
-
-    p {
-      margin-bottom: 15px;
-    }
-
-    ol,
-    ul {
-      margin-bottom: 20px;
-      padding-left: 20px;
-    }
-
-    li {
-      margin-bottom: 10px;
-    }
-
-    strong {
-      color: #fff;
-      font-weight: 600;
-    }
-
-    .highlight {
-      background: rgba(88, 166, 255, 0.15);
-      padding: 2px 6px;
-      border-radius: 4px;
-      color: #58a6ff;
-      font-family: monospace;
-      font-size: 0.9em;
-    }
-
-    .tool-badge {
-      background: #21262d;
-      border: 1px solid #30363d;
-      padding: 3px 8px;
-      border-radius: 6px;
-      color: #c9d1d9;
-      font-weight: 500;
-      font-size: 0.9em;
-    }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
   </style>
 </head>
-
 <body>
-  <div class="container">
-    <h1>&#128218; AQ-TLC Quick Guide</h1>
-    <p style="margin-top:-6px; margin-bottom:20px; font-size:0.85em; color:rgba(201,209,217,0.5); letter-spacing:0.03em;">By <a href="mailto:g.pascali@unsw.edu.au" style="color:rgba(201,209,217,0.6); text-decoration:none; border-bottom:1px dotted rgba(201,209,217,0.35);" onmouseover="this.style.color='#ffc107'" onmouseout="this.style.color='rgba(201,209,217,0.6)'">Giancarlo Pascali</a></p>
-    <p>Welcome to the <strong>Advanced Quantitative Thin Layer Chromatography (AQ-TLC)</strong> analytical workstation.
-      This tool provides interactive, high-precision densitometry directly inside your browser. Follow this guide to
-      achieve accurate and reproducible analytical integrations.</p>
+  <main class="page">
+    <header class="hero">
+      <p class="eyebrow">AQ-TLC v1.0</p>
+      <h1>Desktop quick guide</h1>
+      <p class="lede">A current guide to setting up plate geometry, refining densitograms, calibrating results and producing reports in the three-panel desktop workspace.</p>
+      <span class="platform">Desktop workflow · mouse and keyboard</span>
+    </header>
 
-    <h2>1. Step-by-Step Analytical Process</h2>
-    <p>For the most seamless operation, we recommend executing the analysis in this specific order:</p>
-    <ol>
-      <li><strong>Upload an Image:</strong> Drag and drop your TLC plate image or browse to select it from your
-        computer.</li>
-      <li><strong>Move & Zoom:</strong> Use the <span class=\"tool-badge\">Pan (&#9995;)</span> tool to navigate freely.
-        Scroll up or down with your mouse wheel to zoom dynamically.</li>
-      <li><strong>Crop & Rotate:</strong> Use the <span class=\"tool-badge\">Crop (&#9986;&#65039;)</span> and <span class=\"tool-badge\">Rotate (&#128257;)</span> tools to trim excess backgrounds and perfectly align your plate squarely
-        if it was photographed diagonally. While the Rotate tool is active, <strong>double-click</strong> anywhere on the image to instantly rotate it by exactly 90 degrees clockwise, or click and drag for fine, gradual rotation.</li>
-      <li><strong>Draw Boundary Lines:</strong> Select the <span class=\"tool-badge\">Lines (&#128207;)</span> tool. Click and
-        drag horizontally across the plate to draw distinct lines marking both your <strong>Origin</strong> (where
-        samples were initially placed) and the <strong>Front</strong> (where the solvent strictly stopped). <em>Note:
-          always strive to draw strictly horizontal lines that are completely parallel to the top and bottom physical
-          edges of the TLC plate!</em></li>
-      <li><strong>Pin Spotting Marks:</strong> Select the <span class=\"tool-badge\">Marks (&#128205;)</span> tool. Click
-        precisely along the Origin line to map exactly where each individual chemical dot was dispensed.</li>
-      <li><strong>Calculate:</strong> Click the prominent <span class=\"tool-badge\">&#128269; Find Lanes</span> button. The
-        system will bridge your marks directly to the solvent boundary to intelligently map your lanes!</li>
-    </ol>
+    <nav class="quick-nav" aria-label="Guide sections">
+      <a href="#workflow">Start an analysis</a>
+      <a href="#canvas">Canvas tools</a>
+      <a href="#profile">Peak editing</a>
+      <a href="#results">Results &amp; reports</a>
+    </nav>
 
-    <h2>2. Using the Select Tool</h2>
-    <p>The <span class=\"tool-badge\">Select (&#128070;)</span> tool acts as your primary interactive editor. Activating it
-      enables you to:</p>
-    <ul>
-      <li><strong>Move elements:</strong> Click and drag existing Lines or Spotting Marks around the canvas
-        continuously.</li>
-      <li><strong>Align elements:</strong> Adjust endpoints of lines to fix angles.</li>
-      <li><strong>Delete elements:</strong> Click on any line, mark, or generated lane boundary box to highlight it
-        green. Press <strong>Delete</strong> or <strong>Backspace</strong> on your keyboard to instantly remove it.
-        (Note: Typing text in name fields safely avoids this deletion.)</li>
-    </ul>
+    <section id="workflow">
+      <h2>Start-to-finish workflow</h2>
+      <div class="steps">
+        <div class="step"><b>Load the plate image</b>Drop an image anywhere on the upload screen, or click <strong>Browse</strong> to select it. The longest image dimension is reduced to 1000 px for analysis.</div>
+        <div class="step"><b>Prepare the plate</b>Crop away unused background and rotate the plate so the sample lanes run vertically. Do this before adding lines and marks.</div>
+        <div class="step"><b>Draw the boundaries</b>Select <strong>Boundary Lines</strong> and drag one line across the origin and another across the solvent front. The origin must be below the front, and the lines must be vertically separated.</div>
+        <div class="step"><b>Add sample positions</b>Select <strong>Spotting Marks</strong> and click once at each application position along the origin. Marks placed near the origin snap onto it.</div>
+        <div class="step"><b>Find and inspect lanes</b>Click <strong>Find Lanes</strong>. Blue lane boxes appear and the first lane opens in the analysis panel. Check the geometry and adjust any lane before accepting its profile.</div>
+        <div class="step"><b>Quantify and report</b>Refine peaks, choose Relative Intensity, Area Calibration or MW Calibration, enter standards where needed, then export the active lane or a full multi-lane report.</div>
+      </div>
+      <div class="callout warning"><strong>Session warning:</strong> the Desktop workspace is temporary. Export required reports before refreshing, closing the tab or allowing the Streamlit session to restart. The app does not currently save a project file for later reopening.</div>
+    </section>
 
-    <h2>3. Interacting With Integrated Lanes</h2>
-    <p>Once "Find Lanes" calculates the density arrays, the detailed Densitogram analysis bar deploys on the right. This
-      engine maps the exact signal footprint pixel by pixel.</p>
-    <li><strong>Interactive Chart:</strong>
+    <section id="canvas">
+      <h2>Left panel and canvas tools</h2>
+      <div class="tool-grid">
+        <div class="tool"><h3>Crop ROI</h3><p>Drag a rectangle around the region to keep. The crop is applied when the mouse is released and rotation is baked into the cropped image.</p></div>
+        <div class="tool"><h3>Pan &amp; Zoom</h3><p>Drag empty canvas space to pan. Use the mouse wheel to zoom around the pointer position.</p></div>
+        <div class="tool"><h3>Rotate</h3><p>Drag horizontally for fine rotation. Double-click the image to rotate exactly 90° clockwise.</p></div>
+        <div class="tool"><h3>Select &amp; Edit</h3><p>Click and drag a line, spotting mark or lane to move it. Select an item and press <kbd>Delete</kbd> or <kbd>Backspace</kbd> to remove it.</p></div>
+        <div class="tool"><h3>Boundary Lines</h3><p>Drag to create a line. Drag an existing line to move it, or drag near an end to resize it.</p></div>
+        <div class="tool"><h3>Spotting Marks</h3><p>Click once per sample lane at the origin. Each mark produces one calculated lane.</p></div>
+      </div>
+      <p>To reverse a recent geometry or image edit, press <kbd>Ctrl</kbd> + <kbd>Z</kbd> on Windows or <kbd>⌘</kbd> + <kbd>Z</kbd> on macOS. The in-session undo stack holds up to 50 snapshots.</p>
+
+      <h3>Image and signal controls</h3>
       <ul>
-        <li><strong>Horizontal Zooming:</strong> Hover over the densitogram and use your <strong>mouse wheel</strong> to
-          zoom in on specific signal regions for precise inspection.</li>
-        <li><strong>Naming:</strong> By default, peaks are marked `Lane 1`, `Peak 1`, etc. Click directly on the
-          corresponding text box field to rename them meaningfully for your custom exports.</li>
+        <li><strong>RGB Channel Projection</strong> offers Full RGB, named visual presets and a 380–750 custom weighting.</li>
+        <li><strong>Invert</strong> reverses image colours and updates the analysed profiles.</li>
+        <li><strong>Polarity Mode</strong> selects Default, Dark Spots or Bright Spots to match the plate appearance.</li>
+        <li><strong>Sens.</strong> controls how readily weaker peaks are detected; <strong>Res.</strong> controls minimum peak separation; <strong>Width %</strong> controls the threshold used to define peak presentation.</li>
       </ul>
-    </li>
-    <li><strong>Automated Peak Discovery:</strong> Drag the <strong>Sensitivity (Sens.)</strong>, <strong>Resolution
-        (Res.)</strong>, and <strong>Width %</strong> threshold sliders in the left panel to instantly tighten
-      integration tolerances natively across your current sample until it maps purely against valid signals.</li>
-    <li><strong>Direct Densitogram Overrides:</strong> Automation isn't flawless for skewed plates. You can bypass the
-      algorithms and draw completely manually. Any manually altered peaks will turn <strong>red</strong> in the chart,
-      and will be explicitly marked with an asterisk <strong>(*)</strong> in the Rf column to visibly designate a manual
-      override.
+      <div class="callout blue"><strong>RGB projection is image processing, not spectroscopy.</strong> Named wavelength and staining presets are channel-weighting aids; they do not represent a physical optical filter, monochromator or measured spectral bandwidth.</div>
+
+      <h3>New versus Reset</h3>
       <ul>
-        <li><strong>Resize:</strong> Hover over the vertical boundaries of any gold peak until your cursor turns into a
-          horizontal resize arrow. Click and drag the true bound edges laterally to manually shrink or expand the
-          physical integration layout.</li>
-        <li><strong>Add Peaks:</strong> <strong>Single-click</strong> inside any empty space over the blue signal curve
-          to instantly spawn an entirely new algorithmically-centered peak interval.</li>
-        <li><strong>Delete Peaks:</strong> <strong>Right-click</strong> directly on the apex marker of an existing peak
-          to delete it permanently.</li>
+        <li><strong>New</strong> clears the current analysis and returns immediately to the upload screen.</li>
+        <li><strong>Reset</strong> keeps the uploaded image but restores its original uncropped, unrotated state; it also clears lines, marks, lanes and RGB/invert adjustments.</li>
       </ul>
-    </li>
-    <li><strong>Understanding Abs Ratio:</strong> Some molecular bands inherently stain differently and saturate visual
-      channels faster than others despite having identical equivalent purity weights. Setting the Abs Ratio acts as a
-      correction factor mathematically. For example, if a band has a known absorptive bias factor of `0.5`, setting
-      `0.5` causes the app to natively divide its absolute integrated Area by `0.5` when determining its proportional `%
-      Corr. Area` impact across the total lane. It homogeneously defaults to `1` (which acts as neutral 1:1
-      proportionality).</li>
-    </ul>
+    </section>
 
-    <h2>4. Integration Modalities</h2>
-    <p>AQ-TLC supports two distinct methods for quantifying your chromatographic results. Toggle between them using the
-      tabs above the peaks table:</p>
-    <ul>
-      <li><strong>Relative Intensity (Default):</strong> This mode treats each lane as an independent system. It
-        calculates the percentage of the total integrated area that each peak represents within that specific lane.
-        <ul>
-          <li><strong>Abs Ratio:</strong> Use this correction factor to account for differences in staining or
-            absorption. Setting it to `0.5` will double the "Corrected Area" relative to other peaks with a ratio of
-            `1`.</li>
-        </ul>
-      </li>
-      <li><strong>Area Calibration:</strong> This powerful mode allows for absolute quantification using a
-        <strong>Global Calibration Curve</strong> derived from your standards.
-        <ul>
-          <li><strong>Type S (Standard):</strong> Use this for peaks with a precisely known concentration or amount.
-            When selected, you can enter the numerical value in the <strong>Value</strong> column.</li>
-          <li><strong>Type N (Neutral):</strong> The default state. These peaks are integrated but not used for
-            calibration calculations or quantification.</li>
-          <li><strong>Type A (Analyte):</strong> Use this for samples of unknown concentration. The system will
-            automatically calculate and display their value based on the calibration curve.</li>
-          <li><strong>The Curve:</strong> The calibration curve is built using every peak flagged as <strong>S</strong>
-            across <em>all</em> lanes in the image. If 1 standard is provided, a linear-through-origin model is used;
-            with 2 or more, a full linear regression is applied.</li>
-        </ul>
-      </li>
-      <li><strong>MW Calibration:</strong> Specifically designed for biological assays (e.g., <strong>SDS-PAGE, Western
-          Blotting, or vertical electrophoresis</strong>), this mode calculates Molecular Weight based on relative
-        mobility (Rf).
-        <ul>
-          <li><strong>Rf assumption:</strong> For accurate MW calculation, ensure the <strong>Origin</strong> line is
-            placed at the bottom and the <strong>Front</strong> line at the top of the plate image, even if your
-            physical gel was run in a different orientation.</li>
-          <li><strong>Piecewise Log-Linear Model:</strong> Mobility is modeled as Rf <i>vs</i> log<sub>10</sub>MW.
-            The system uses a piecewise approach, connecting your standards with exact lines in the log-space.</li>
-          <li><strong>Minimum Requirements:</strong> A <strong>minimum of 2 standards (Type S)</strong> is strictly
-            required for calculation to occur. If only one standard is provided, the system will display a warning and
-            withhold estimations.</li>
-          <li><strong>Standards (S):</strong> Enter the known Molecular Weight (e.g., in kDa) for your ladder spots. The
-            system will interpolate (and extrapolate) to find the weight of your <strong>Analytes (A)</strong> based on
-            their specific Rf.</li>
-        </ul>
-      </li>
-    </ul>
+    <section id="profile">
+      <h2>Right panel: select a lane and refine peaks</h2>
+      <p>Use the Select tool and click a blue lane box to make it active. The right panel shows its editable name, densitogram, result table and report controls.</p>
 
-    <h2>5. Exporting High-Quality Reports</h2>
-    <p>When you achieve the integration profile required, use the native printing modules to archive robust,
-      laboratory-grade PDF documentation logs. Reports automatically adapt to reflect your active integration modality
-      (Relative or Area Calibration):</p>
-    <ul>
-      <li><strong>Export Lane:</strong> Located inside individual pane cards. Clicking this generates a targeted report
-        for the specific lane currently selected.</li>
-      <li><strong>Reset integration (&#128259;):</strong> Located inside individual pane cards. This button clears all manual
-        edits for the specific lane and re-runs the automated peak detection algorithm based on current slider settings.
-      </li>
-      <li><strong>Full Report:</strong> Rapidly stitches every active lane into a beautifully segmented, multipage
-        document sequence.</li>
-    </ul>
+      <h3>Densitogram interactions</h3>
+      <ul>
+        <li><strong>Add a peak:</strong> single-click empty chart space inside the valid Rf range.</li>
+        <li><strong>Move a peak:</strong> drag its apex marker left or right.</li>
+        <li><strong>Resize the measured interval:</strong> drag either vertical boundary handle. The cursor changes to a horizontal resize indicator near a boundary.</li>
+        <li><strong>Delete one peak:</strong> right-click its apex marker.</li>
+        <li><strong>Run detection again:</strong> double-click the chart or choose <strong>Reset integration</strong>. This can replace manual edits with a new automatic result.</li>
+        <li><strong>Navigate:</strong> use the mouse wheel to zoom horizontally around the pointer. Choose <strong>Reset view</strong> to show the full profile.</li>
+        <li><strong>Clear the lane:</strong> choose <strong>Delete all peaks</strong> to remove every peak from the active lane.</li>
+      </ul>
 
-    <h2>6. Workspace Management</h2>
-    <p>Two essential buttons manage your state seamlessly:</p>
-    <ul>
-      <li><strong>New (&#128194;):</strong> A hard reset. Completely purges the loaded image payload and mathematical cache,
-        flushing you backwards directly into the original landing boundary screen requesting a fresh upload.</li>
-      <li><strong>Reset (&#128259;):</strong> A soft reset. Non-destructively purges the mathematical vector data (lines,
-        marks, densitograms) but rigorously retains the native image load, zooming, and rotations applied so you can
-        iterate an alternative tracing without needing to constantly drop external file prompts.</li>
-    </ul>
+      <div class="legend" aria-label="Peak colour legend">
+        <div class="legend-item"><span class="dot gold"></span><span><strong>Gold</strong> — automatically detected peak.</span></div>
+        <div class="legend-item"><span class="dot red"></span><span><strong>Red with an asterisk</strong> — manually added or adjusted peak.</span></div>
+        <div class="legend-item"><span class="dot green"></span><span><strong>Green</strong> — a peak assigned as a calibration standard.</span></div>
+      </div>
+      <div class="callout"><strong>How area is measured:</strong> peak area is the baseline-corrected trapezoidal area of the normalized analytical profile between the solid boundary edges. The narrower dashed box is a threshold/FWHM visual aid and is not the AUC interval.</div>
+    </section>
 
-    <h2>7. Practical Laboratory Suggestions & Image Quality</h2>
-    <p>For the most scientifically reliable detection capability using software chromatography, consider both physical
-      TLC best practices and photographic discipline:</p>
-    <ul>
-      <li><strong>Optimizing TLC Runs:</strong> Use clean, level solvent chambers and ensure the chamber atmosphere is
-        thoroughly saturated with solvent vapor (using filter paper pads) prior to dropping your plate. This fiercely
-        avoids "smiling" wavefronts where edges unpredictably evaporate quicker and run irregularly, ensuring
-        consistently parallel horizontal Rf bounds uniformly!</li>
-      <li><strong>Sample Spotting:</strong> Apply samples as highly concentrated spots, keeping them physically as tight
-        as possible. Do not overload; broad starting streaks instantly devastate downstream vertical peak resolution.
-      </li>
-      <li><strong>Illumination is Key:</strong> Capture plate layouts purely under completely uniform, intensely bright
-        lighting (e.g. inside a sealed UV/Vis documentation chamber). Minimize heavy cast shadows originating from
-        ceiling fixtures hitting your hands or phone profile.</li>
-      <li><strong>Background Contrast:</strong> Remove the TLC plate entirely from cluttered, reflective laboratory
-        hardware shelves immediately prior to snapping the image. Stage it cleanly against a uniform expanse of stark
-        white, matte printer paper or a pure black light-absorbing fabric board.</li>
-      <li><strong>Minimize Lens Distortion:</strong> Aim the camera squarely and symmetrically down onto the center axis
-        directly overhead (birds-eye view). Dramatically angled photos skew focal planes, inherently corrupting the
-        parallel consistency assumption required for lane-to-lane mapping geometry calculation natively!</li>
-    </ul>
+    <section id="results">
+      <h2>Choose an integration mode</h2>
+      <div class="mode-grid">
+        <div class="mode">
+          <h3>Relative Intensity</h3>
+          <p>Calculates each peak as a percentage of total integrated area within its lane. <strong>Abs Ratio</strong> is an optional response correction: corrected area is area divided by the ratio. Leave it at 1 for no correction.</p>
+        </div>
+        <div class="mode">
+          <h3>Area Calibration</h3>
+          <p>Set known peaks to <strong>S</strong> and enter their values; set unknowns to <strong>A</strong>; use <strong>N</strong> to exclude a peak. One standard gives a line through zero, while two or more valid standards use linear regression.</p>
+        </div>
+        <div class="mode">
+          <h3>MW Calibration</h3>
+          <p>Set at least two peaks with known positive molecular weights to <strong>S</strong>, then set unknowns to <strong>A</strong>. The app interpolates or extrapolates piecewise in log<sub>10</sub>(MW) versus Rf space.</p>
+        </div>
+      </div>
+      <p>Standards are collected from every lane in the current image, so assignments in one lane can affect analyte values elsewhere. Check that standards use consistent units and distinct valid values.</p>
 
-  </div>
+      <h3>Export reports</h3>
+      <ul>
+        <li><strong>Export Lane</strong> prepares a report for the active lane.</li>
+        <li><strong>Full Report</strong> prepares a multi-page report for all lanes.</li>
+        <li>The report includes the lane image, densitogram and table for the currently selected integration mode. In the browser print window choose <strong>Print</strong> or <strong>Save as PDF</strong>. If the report window is blocked, a printable HTML file is downloaded instead.</li>
+      </ul>
+    </section>
+
+    <section id="quality">
+      <h2>For more reliable results</h2>
+      <ul>
+        <li>Capture the plate square-on with even illumination and minimal glare or shadow.</li>
+        <li>Place origin and solvent-front lines at the true physical boundaries and keep them parallel.</li>
+        <li>Use compact, well-separated sample spots and avoid overloaded or streaked lanes.</li>
+        <li>Inspect every lane box, profile, integration boundary and standard assignment before reporting.</li>
+        <li>Treat AQ-TLC as an analytical aid. Validate image capture, peak detection and calibration for the intended plate chemistry and laboratory method.</li>
+      </ul>
+      <div class="callout danger"><strong>Data handling:</strong> the plate image is sent to the selected Streamlit app for analysis. Do not upload sensitive material until the deployment's access controls and your organisation's privacy requirements have been confirmed.</div>
+    </section>
+
+    <p class="footer">AQ-TLC v1.0 · Desktop quick guide</p>
+  </main>
 </body>
-
 </html>
