@@ -73,11 +73,7 @@ export function calculatePeakArea(profile, lb, rb) {
   return Math.max(0, area);
 }
 
-/**
- * Finds AUC and threshold-display bounds for a manual peak in the common
- * origin-to-front analysis signal.  Display bounds are descriptive only;
- * area bounds remain the draggable/reportable integration interval.
- */
+/** Finds the single Width-controlled interval for display and integration. */
 export function findPeakBounds(profile, apex, thresholdPercent = 50) {
   if (!Array.isArray(profile) || profile.length < 2) {
     return { area_lb: 0, area_rb: 0, display_lb: 0, display_rb: 0 };
@@ -103,7 +99,12 @@ export function findPeakBounds(profile, apex, thresholdPercent = 50) {
     displayLb = Math.max(areaLb, index - 2);
     displayRb = Math.min(areaRb, index + 2);
   }
-  return { area_lb: areaLb, area_rb: areaRb, display_lb: displayLb, display_rb: displayRb };
+  return {
+    area_lb: displayLb,
+    area_rb: displayRb,
+    display_lb: displayLb,
+    display_rb: displayRb,
+  };
 }
 
 //                                                                             

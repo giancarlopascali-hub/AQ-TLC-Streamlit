@@ -136,7 +136,7 @@
         <li><strong>RGB Channel Projection</strong> offers Full RGB, named visual presets and a 380–750 custom weighting.</li>
         <li><strong>Invert</strong> reverses image colours and updates the analysed profiles.</li>
         <li><strong>Polarity Mode</strong> selects Default, Dark Spots or Bright Spots to match the plate appearance.</li>
-        <li><strong>Sens.</strong> controls how readily weaker peaks are detected; <strong>Res.</strong> controls minimum peak separation; <strong>Width %</strong> controls the threshold used to define peak presentation.</li>
+        <li><strong>Sens.</strong> controls how readily weaker peaks are detected; <strong>Res.</strong> controls minimum peak separation; <strong>Width %</strong> controls the threshold used to define each peak's visible and analytical integration boundaries.</li>
       </ul>
       <div class="callout blue"><strong>RGB projection is image processing, not spectroscopy.</strong> Named wavelength and staining presets are channel-weighting aids; they do not represent a physical optical filter, monochromator or measured spectral bandwidth.</div>
 
@@ -167,7 +167,7 @@
         <div class="legend-item"><span class="dot red"></span><span><strong>Red with an asterisk</strong> — manually added or adjusted peak.</span></div>
         <div class="legend-item"><span class="dot green"></span><span><strong>Green</strong> — a peak assigned as a calibration standard.</span></div>
       </div>
-      <div class="callout"><strong>How area is measured:</strong> peak area is the baseline-corrected trapezoidal area of the normalized analytical profile between the solid boundary edges. The narrower dashed box is a threshold/FWHM visual aid and is not the AUC interval.</div>
+      <div class="callout"><strong>How area is measured:</strong> peak area is the baseline-corrected trapezoidal area of the normalized analytical profile between the single pair of Width-controlled boundary edges. Dragging either edge immediately recalculates the area.</div>
     </section>
 
     <section id="results">

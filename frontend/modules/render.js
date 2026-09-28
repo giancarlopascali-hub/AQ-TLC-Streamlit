@@ -286,8 +286,8 @@ export function render() {
     const n = (l.profile || []).length;
     if (n > 1) {
       (l.peaks || []).forEach(pk => {
-        const lb    = pk.lb !== undefined ? pk.lb : Math.max(0, pk.idx - 5);
-        const rb    = pk.rb !== undefined ? pk.rb : Math.min(n - 1, pk.idx + 5);
+        const lb = pk.display_lb ?? pk.area_lb ?? pk.lb ?? Math.max(0, pk.idx - 5);
+        const rb = pk.display_rb ?? pk.area_rb ?? pk.rb ?? Math.min(n - 1, pk.idx + 5);
 
         // Profile index 0 = Front, n-1 = Origin (reversed).  Map to lane canvas-Y.
         // y_top corresponds to rb (closer to Front = higher up the lane).

@@ -202,7 +202,11 @@ def calculate_rf(idx: int, length: int) -> float:
 
 
 def _display_bounds(signal: np.ndarray, idx: int, area_lb: int, area_rb: int, threshold: float) -> tuple[int, int]:
-    """Derive a threshold display band within, but distinct from, AUC bounds."""
+    """Return the single Width-controlled interval within the detected base.
+
+    The SciPy base positions are search limits only. The returned threshold
+    crossings are authoritative for display, manual editing, and AUC.
+    """
     baseline = min(float(signal[area_lb]), float(signal[area_rb]))
     cutoff = baseline + (float(signal[idx]) - baseline) * threshold
     left, right = area_lb, area_rb
@@ -351,8 +355,8 @@ def generate_profiles(data: dict[str, Any]) -> dict[str, Any]:
                         continue
                     area_lb = int(properties["left_bases"][peak_number])
                     area_rb = int(properties["right_bases"][peak_number])
-                    display_lb, display_rb = _display_bounds(profile_analysis, int(idx), area_lb, area_rb, threshold)
-                    area = calculate_peak_area(profile_analysis, area_lb, area_rb)
+                    peak_lb, peak_rb = _display_bounds(profile_analysis, int(idx), area_lb, area_rb, threshold)
+                    area = calculate_peak_area(profile_analysis, peak_lb, peak_rb)
                     peaks.append({
                         "idx": int(idx),
                         "rf": round(rf, 3),
@@ -360,13 +364,13 @@ def generate_profiles(data: dict[str, Any]) -> dict[str, Any]:
                         "height_display": round(float(profile_display[idx]), 2),
                         "height_analysis": round(float(profile_analysis[idx]), 4),
                         "area": round(area, 4),
-                        "area_lb": area_lb,
-                        "area_rb": area_rb,
-                        "display_lb": display_lb,
-                        "display_rb": display_rb,
-                        # Backward-compatible aliases now denote AUC bounds.
-                        "lb": area_lb,
-                        "rb": area_rb,
+                        "area_lb": peak_lb,
+                        "area_rb": peak_rb,
+                        # Compatibility aliases: there is one boundary set.
+                        "display_lb": peak_lb,
+                        "display_rb": peak_rb,
+                        "lb": peak_lb,
+                        "rb": peak_rb,
                         "manual": False,
                         "type": "N",
                     })

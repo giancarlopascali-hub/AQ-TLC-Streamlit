@@ -46,8 +46,19 @@ def test_profile_response_has_explicit_analysis_contract() -> None:
     assert len(lane["profile_display"]) == len(lane["profile_analysis"])
     assert all(0 <= value <= 100 for value in lane["profile_analysis"])
     for peak in lane["peaks"]:
-        assert peak["area_lb"] <= peak["display_lb"] <= peak["display_rb"] <= peak["area_rb"]
+        assert (peak["area_lb"], peak["area_rb"]) == (peak["display_lb"], peak["display_rb"])
         assert peak["area"] >= 0
+
+
+def test_width_threshold_is_the_authoritative_integration_interval() -> None:
+    import numpy as np
+
+    signal = np.asarray([0, 5, 25, 100, 25, 5, 0], dtype=float)
+    wide = tlc_backend._display_bounds(signal, 3, 0, 6, 0.20)
+    narrow = tlc_backend._display_bounds(signal, 3, 0, 6, 0.60)
+    assert wide == (1, 5)
+    assert narrow == (2, 4)
+    assert tlc_backend.calculate_peak_area(signal, *narrow) < tlc_backend.calculate_peak_area(signal, *wide)
 
 
 def test_invalid_payload_is_a_safe_error() -> None:

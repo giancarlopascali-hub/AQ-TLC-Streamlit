@@ -64,14 +64,18 @@ function areaLeft(peak) { return Number.isInteger(peak.area_lb) ? peak.area_lb :
 function areaRight(peak) { return Number.isInteger(peak.area_rb) ? peak.area_rb : peak.rb; }
 
 function ensurePeakBounds(peak, length) {
-  const left = Math.max(0, Math.min(Number.isInteger(areaLeft(peak)) ? areaLeft(peak) : peak.idx - 1, length - 1));
-  const right = Math.max(left + 1, Math.min(Number.isInteger(areaRight(peak)) ? areaRight(peak) : peak.idx + 1, length - 1));
+  // Migrate responses produced by the former dual-bound contract by keeping
+  // its Width-controlled (smaller) interval as the one canonical interval.
+  const preferredLeft = Number.isInteger(peak.display_lb) ? peak.display_lb : areaLeft(peak);
+  const preferredRight = Number.isInteger(peak.display_rb) ? peak.display_rb : areaRight(peak);
+  const left = Math.max(0, Math.min(Number.isInteger(preferredLeft) ? preferredLeft : peak.idx - 1, length - 1));
+  const right = Math.max(left + 1, Math.min(Number.isInteger(preferredRight) ? preferredRight : peak.idx + 1, length - 1));
   peak.area_lb = left;
   peak.area_rb = right;
   peak.lb = left; // compatibility with saved pre-contract projects.
   peak.rb = right;
-  peak.display_lb = Math.max(left, Math.min(Number.isInteger(peak.display_lb) ? peak.display_lb : left, right));
-  peak.display_rb = Math.max(peak.display_lb, Math.min(Number.isInteger(peak.display_rb) ? peak.display_rb : right, right));
+  peak.display_lb = left;
+  peak.display_rb = right;
 }
 
 function setPeakFromApex(peak, profile, index, threshold) {
@@ -586,19 +590,10 @@ export function drawProfileChart(cv, l) {
       rgbaLine = 'rgba(255, 215, 0, 0.6)';
     }
 
-    // Integration boundary fill
+    // The fill, edge lines, and drag handles all use the one Width-controlled
+    // interval that is also used for AUC.
     ctx.fillStyle = rgbaFill;
     ctx.fillRect(lb_x, PAD_T, rb_x - lb_x, plotH);
-
-    // A narrow dashed band can communicate threshold/FWHM presentation
-    // without pretending that it is the AUC interval.
-    const displayLbX = PAD_L + ((pk.display_lb / (p.length - 1)) * z + off) * plotW;
-    const displayRbX = PAD_L + ((pk.display_rb / (p.length - 1)) * z + off) * plotW;
-    ctx.strokeStyle = rgbaLine;
-    ctx.lineWidth = 1;
-    ctx.setLineDash([2, 3]);
-    ctx.strokeRect(displayLbX, PAD_T + 2, Math.max(0, displayRbX - displayLbX), plotH - 4);
-    ctx.setLineDash([]);
 
     // Boundary edge lines
     ctx.strokeStyle = rgbaLine;
@@ -732,9 +727,12 @@ function setupChartInteractions(cv, l) {
       const lb_x  = idxToX(areaLeft(pk));
       const rb_x  = idxToX(areaRight(pk));
 
-      if (Math.abs(mx - apexX) < 20)        hitApex  = pk;
-      else if (Math.abs(mx - lb_x) < 10)    hitBound = { pk, type: 'lb' };
-      else if (Math.abs(mx - rb_x) < 10)    hitBound = { pk, type: 'rb' };
+      // Boundary handles can sit close to the apex for narrow peaks. Give an
+      // exact handle hit priority so those Width-controlled edges stay
+      // draggable; the wider apex tolerance is only a fallback.
+      if (Math.abs(mx - lb_x) < 10)          hitBound = { pk, type: 'lb' };
+      else if (Math.abs(mx - rb_x) < 10)     hitBound = { pk, type: 'rb' };
+      else if (Math.abs(mx - apexX) < 20)    hitApex  = pk;
     }
 
     // Right-click on apex: delete the peak
@@ -803,9 +801,9 @@ function setupChartInteractions(cv, l) {
       else               pk.area_rb = Math.max(areaLeft(pk) + 1, Math.min(p.length - 1, idx));
       pk.lb = pk.area_lb;
       pk.rb = pk.area_rb;
+      pk.display_lb = pk.area_lb;
+      pk.display_rb = pk.area_rb;
       pk.manual = true;
-      pk.display_lb = Math.max(pk.area_lb, Math.min(pk.display_lb, pk.area_rb));
-      pk.display_rb = Math.max(pk.display_lb, Math.min(pk.display_rb, pk.area_rb));
       pk.area = calculatePeakArea(p, pk.area_lb, pk.area_rb);
 
       // Redraw chart only (not the table) during drag for smooth feedback
