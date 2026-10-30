@@ -38,7 +38,9 @@ jobs:
             node --check "$file"
           done < <(find frontend -type f -name '*.js' -print0)
       - name: Run JavaScript contract tests
-        run: node tests/javascript/analysis.test.mjs
+        run: |
+          node tests/javascript/analysis.test.mjs
+          node tests/javascript/image_filters.test.mjs
       - name: Scan tracked source for high-risk secret patterns
         shell: bash
         run: |
