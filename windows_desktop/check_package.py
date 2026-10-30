@@ -28,7 +28,7 @@ def main(url: str) -> None:
     status, body = request(port, "GET", "/health")
     assert status == 200 and json.loads(body)["status"] == "ok"
     status, body = request(port, "GET", "/")
-    assert status == 200 and b"AQ-TLC v1.0" in body
+    assert status == 200 and b"AQ-TLC v1.1" in body
     assert b"fonts.googleapis.com" not in body  # offline staging
     status, body = request(port, "GET", "/modules/streamlit_bridge.js")
     assert status == 200 and b"fetch('/api'" in body

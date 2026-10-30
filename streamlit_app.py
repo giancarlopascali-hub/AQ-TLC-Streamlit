@@ -1,7 +1,7 @@
 """
 streamlit_app.py
 ================
-AQ-TLC v1.0 -- Streamlit Cloud entry point.
+AQ-TLC v1.1 -- Streamlit Cloud entry point.
 
 Architecture
 ------------
@@ -35,12 +35,12 @@ _FAVICON_PATH = os.path.join(_ROOT_DIR, "favicon.ico")
 _favicon = Image.open(_FAVICON_PATH) if os.path.exists(_FAVICON_PATH) else None
 
 st.set_page_config(
-    page_title="AQ-TLC v1.0",
+    page_title="AQ-TLC v1.1",
     page_icon=_favicon,
     layout="wide",
     initial_sidebar_state="collapsed",
     menu_items={
-        "About": "AQ-TLC v1.0 -- Advanced Quantitative TLC Analysis\nBy Giancarlo Pascali",
+        "About": "AQ-TLC v1.1 -- Advanced Quantitative TLC Analysis\nBy Giancarlo Pascali",
     },
 )
 

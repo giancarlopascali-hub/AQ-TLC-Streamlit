@@ -1,4 +1,4 @@
-AQ-TLC Desktop v1.0 for Windows (64-bit)
+AQ-TLC Desktop v1.1 for Windows (64-bit)
 
 1. Extract the whole ZIP before running the app.
 2. Keep AQ-TLC-Desktop.exe and the _internal folder together.

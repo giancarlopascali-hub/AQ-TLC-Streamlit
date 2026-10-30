@@ -54,7 +54,7 @@ class WindowsHostTests(unittest.TestCase):
     def test_serves_desktop_interface(self) -> None:
         status, data = self.request("GET", "/")
         self.assertEqual(status, 200)
-        self.assertIn(b"AQ-TLC v1.0", data)
+        self.assertIn(b"AQ-TLC v1.1", data)
         status, data = self.request("GET", "/modules/api.js")
         self.assertEqual(status, 200)
         self.assertIn(b"generate_profiles", data)

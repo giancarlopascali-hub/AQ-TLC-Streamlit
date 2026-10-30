@@ -192,7 +192,7 @@ export async function exportReport(type = null) {
     reportHtml += `
         <div class="page-break">
             <div class="header">
-                <div><h1 style="color:#0366d6; margin:0">AQ-TLC Analytical Report <span class="badge">v1.0</span></h1>
+                <div><h1 style="color:#0366d6; margin:0">AQ-TLC Analytical Report <span class="badge">v1.1</span></h1>
                      <p style="color:#666; margin:5px 0 0 0">Sample: <strong>${escapeHtml(l.name || l.id)}</strong></p></div>
                 <div style="text-align:right; color:#888; font-size:0.9rem">${new Date().toLocaleString()}</div>
             </div>

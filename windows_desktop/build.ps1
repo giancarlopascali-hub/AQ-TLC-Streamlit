@@ -9,7 +9,7 @@ $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $build = Join-Path $repo '.windows-build'
 $zip = if ([string]::IsNullOrWhiteSpace($OutputZip)) {
-    Join-Path ([Environment]::GetFolderPath('Desktop')) 'AQ-TLC-Desktop-v1.0-Windows-x64.zip'
+    Join-Path ([Environment]::GetFolderPath('Desktop')) 'AQ-TLC-Desktop-v1.1-Windows-x64.zip'
 } else {
     [System.IO.Path]::GetFullPath($OutputZip)
 }

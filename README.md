@@ -1,4 +1,4 @@
-# AQ-TLC Desktop v1.0
+# AQ-TLC Desktop v1.1
 
 AQ-TLC Desktop is a Streamlit-hosted quantitative thin-layer chromatography
 workspace with a three-panel canvas interface for plate geometry,

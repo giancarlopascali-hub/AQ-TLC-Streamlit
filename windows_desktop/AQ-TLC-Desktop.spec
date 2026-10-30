@@ -10,7 +10,7 @@ site_packages = root / ".windows-build" / "venv" / "Lib" / "site-packages"
 licenses = [
     (site_packages / "numpy-2.2.6.dist-info" / "LICENSE.txt", "licenses/numpy"),
     (site_packages / "scipy-1.14.1.dist-info" / "LICENSE.txt", "licenses/scipy"),
-    (site_packages / "pillow-12.3.0.dist-info" / "licenses" / "LICENSE", "licenses/pillow"),
+    (site_packages / "pillow-13.0.0.dist-info" / "licenses" / "LICENSE", "licenses/pillow"),
     (site_packages / "opencv_python_headless-4.13.0.92.dist-info" / "LICENSE.txt", "licenses/opencv"),
     (site_packages / "opencv_python_headless-4.13.0.92.dist-info" / "LICENSE-3RD-PARTY.txt", "licenses/opencv"),
     (site_packages / "pyinstaller-6.19.0.dist-info" / "licenses" / "COPYING.txt", "licenses/pyinstaller"),
