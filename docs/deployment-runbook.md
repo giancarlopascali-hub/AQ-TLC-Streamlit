@@ -74,7 +74,7 @@ Run this test on the deployed URL:
 2. Crop and rotate the image; add origin/front lines and spotting marks.
 3. Calculate lanes and check the first lane opens in the analysis panel.
 4. Move a lane and verify its profile updates.
-5. Change RGB projection, Invert, polarity, sensitivity, resolution and width;
+5. Change RGB projection, custom target, RGB window, Invert, polarity, sensitivity, resolution and width;
    confirm the image/profile response matches the selected controls.
 6. Add, move, resize and right-click-delete a manual peak; confirm area, Rf
    and table values update together.

@@ -156,8 +156,8 @@ export const state = {
 
   // -- Wavelength Filter ---------------------------------------------------
   /**
-   * Target wavelength for spectral filtering (in nm, 380..750).
-   * null or 'full' indicates full-spectrum RGB grayscale conversion.
+   * RGB projection target label in integer nm (380..750).
+   * null indicates ordinary full-RGB grayscale conversion.
    * @type {number|string|null}
    */
   targetWavelength: null,
@@ -165,8 +165,8 @@ export const state = {
   /** @type {string} Active wavelength preset button ('full'|'540'|'570'|'450'|'650'|'custom') */
   wavelengthPreset: 'full',
 
-  /** @type {number} Reserved for a future validated projection model; not exposed in the UI. */
-  wavelengthBandwidth: 25,
+  /** @type {number} RGB window half-width in integer nm (0..50). */
+  wavelengthBandwidth: 0,
 
   /** @type {boolean} True if visual image colors are inverted */
   invertColors: false,

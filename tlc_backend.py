@@ -128,22 +128,44 @@ def wavelength_to_rgb(wavelength: float) -> tuple[float, float, float]:
     return r * factor, g * factor, b * factor
 
 
-def load_gray(b64str: str, target_wavelength: Any = None) -> np.ndarray:
+def _filter_integer(value: Any, field: str, minimum: int, maximum: int) -> int:
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise InputValidationError(f"{field} must be numeric.") from exc
+    if not math.isfinite(number) or not minimum <= number <= maximum:
+        raise InputValidationError(f"{field} must be between {minimum} and {maximum} nm.")
+    return math.floor(number + 0.5)
+
+
+def wavelength_window_to_rgb(target: Any, half_width: Any = 0) -> tuple[float, float, float]:
+    """Average the approximate raw RGB vectors over an inclusive ±nm window."""
+    centre = _filter_integer(target, "RGB projection wavelength", 380, 750)
+    radius = _filter_integer(0 if half_width is None else half_width, "RGB projection window", 0, 50)
+    first = max(380, centre - radius)
+    last = min(750, centre + radius)
+    red = green = blue = 0.0
+    for nm in range(first, last + 1):
+        r, g, b = wavelength_to_rgb(nm)
+        red += r
+        green += g
+        blue += b
+    count = last - first + 1
+    return red / count, green / count, blue / count
+
+
+def load_gray(b64str: str, target_wavelength: Any = None, wavelength_bandwidth: Any = 0) -> np.ndarray:
     """Load grayscale or a clearly-labelled RGB-channel projection."""
     source_key = hashlib.sha256(b64str.encode("utf-8")).hexdigest()
     if target_wavelength is not None and str(target_wavelength).strip().lower() not in {"", "full", "none", "null"}:
-        try:
-            wavelength = float(target_wavelength)
-        except (TypeError, ValueError) as exc:
-            raise InputValidationError("RGB projection wavelength must be numeric.") from exc
-        if not 380 <= wavelength <= 750:
-            raise InputValidationError("RGB projection wavelength must be between 380 and 750 nm.")
-        key = f"{source_key}_gray_wl_{wavelength:.1f}"
+        wavelength = _filter_integer(target_wavelength, "RGB projection wavelength", 380, 750)
+        half_width = _filter_integer(0 if wavelength_bandwidth is None else wavelength_bandwidth, "RGB projection window", 0, 50)
+        key = f"{source_key}_gray_wl_{wavelength}_window_{half_width}"
         cached = _cache_get(key)
         if cached is not None:
             return cached
         color = load_image(b64str)
-        r, g, b = wavelength_to_rgb(wavelength)
+        r, g, b = wavelength_window_to_rgb(wavelength, half_width)
         total = r + g + b
         w_r, w_g, w_b = (r / total, g / total, b / total) if total > 0 else (0.299, 0.587, 0.114)
         gray = (
@@ -287,7 +309,7 @@ def generate_profiles(data: dict[str, Any]) -> dict[str, Any]:
 
         if not isinstance(data, dict):
             raise InputValidationError("Analysis data must be an object.")
-        image = load_gray(data.get("image"), data.get("target_wavelength"))
+        image = load_gray(data.get("image"), data.get("target_wavelength"), data.get("wavelength_bandwidth", 0))
         if bool(data.get("invert_colors", False)):
             image = 255 - image
         image_height, image_width = image.shape[:2]

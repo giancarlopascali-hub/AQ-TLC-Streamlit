@@ -6,6 +6,7 @@ import base64
 import io
 
 from PIL import Image
+import pytest
 
 import tlc_backend
 
@@ -19,6 +20,60 @@ def _image_data_url() -> str:
     buffer = io.BytesIO()
     image.save(buffer, format="PNG")
     return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
+def _solid_image_data_url(rgb: tuple[int, int, int]) -> str:
+    buffer = io.BytesIO()
+    Image.new("RGB", (2, 2), color=rgb).save(buffer, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
+def _green_band_image_data_url() -> str:
+    image = Image.new("RGB", (64, 96), color=(0, 0, 0))
+    for y in range(35, 45):
+        for x in range(20, 44):
+            image.putpixel((x, y), (0, 200, 0))
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
+def test_rgb_window_changes_projection_and_full_rgb_ignores_it() -> None:
+    image = _solid_image_data_url((0, 200, 0))
+    red_only = tlc_backend.load_gray(image, 650, 0)
+    red_with_window = tlc_backend.load_gray(image, 650, 50)
+    assert red_only[0, 0] == 0
+    assert red_with_window[0, 0] > 0
+    assert red_with_window[0, 0] == tlc_backend.load_gray(image, 650, 50)[0, 0]
+    assert (tlc_backend.load_gray(image, 650, None) == red_only).all()
+    assert (tlc_backend.load_gray(image, None, 0) == tlc_backend.load_gray(image, None, 50)).all()
+
+
+def test_rgb_window_rounds_to_integer_nm_and_rejects_invalid_values() -> None:
+    assert tlc_backend.wavelength_window_to_rgb(650.5, 0.5) == tlc_backend.wavelength_window_to_rgb(651, 1)
+    assert tlc_backend.wavelength_window_to_rgb(650, None) == tlc_backend.wavelength_window_to_rgb(650, 0)
+    assert tlc_backend.wavelength_window_to_rgb(380, 50) != tlc_backend.wavelength_to_rgb(380)
+    with pytest.raises(tlc_backend.InputValidationError):
+        tlc_backend.wavelength_window_to_rgb(650, 51)
+
+
+def test_rgb_window_reaches_profile_pipeline() -> None:
+    payload = {
+        "image": _green_band_image_data_url(),
+        "lanes": [{"id": 1, "cx": 32, "cy": 48, "w": 24, "h": 80, "angle": 0}],
+        "peak_detection": True,
+        "peak_prominence": 10,
+        "peak_distance": 3,
+        "peak_threshold": 50,
+        "smooth_sigma": 1,
+        "polarity_mode": "bright",
+        "target_wavelength": 650,
+    }
+    no_window = tlc_backend.generate_profiles({**payload, "wavelength_bandwidth": 0})["results"][0]
+    wide_window = tlc_backend.generate_profiles({**payload, "wavelength_bandwidth": 50})["results"][0]
+    assert max(no_window["profile_display"]) == 0
+    assert max(wide_window["profile_display"]) > 0
+    assert len(wide_window["peaks"]) > 0
 
 
 def test_peak_area_matches_trapezoid_contract() -> None:

@@ -10,6 +10,5 @@ or a Python installation. Your working session is temporary; export reports
 before closing the app. If the browser does not open, use the local address
 printed in the console window.
 
-Analysis source: AQ-TLC-Streamlit main, commit eca4137.
-This Windows package uses the same TLC analysis backend and desktop interface.
+This Windows package includes the AQ-TLC Desktop analysis backend and interface.
 Third-party licenses are in _internal/licenses.

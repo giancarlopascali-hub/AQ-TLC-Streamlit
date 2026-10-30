@@ -147,13 +147,24 @@
                 <label style="color:var(--text-dim);">Target:</label>
                 <div style="display:flex;align-items:center;gap:4px;">
                   <span id="wl-swatch" style="display:inline-block;width:10px;height:10px;border-radius:50%;background:#fff;border:1px solid #555;"></span>
-                  <input type="number" id="wl-num-input" min="380" max="750" value="540"
+                  <input type="number" id="wl-num-input" min="380" max="750" step="1" value="540"
                          style="width:45px;background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:3px;color:#fff;font-size:0.65rem;text-align:right;padding:1px 3px;">
                   <span style="font-size:0.65rem;color:var(--text-dim);">nm</span>
                 </div>
               </div>
-              <input type="range" id="wl-slider" min="380" max="750" value="540"
+              <input type="range" id="wl-slider" min="380" max="750" step="1" value="540"
                      class="rainbow-slider" style="height:10px;width:100%;cursor:pointer;">
+              <div class="slider-header" style="font-size:0.65rem;display:flex;justify-content:space-between;align-items:center;margin-top:3px;">
+                <label for="wl-bw-input" style="color:var(--text-dim);">RGB window:</label>
+                <div style="display:flex;align-items:center;gap:4px;">
+                  <span style="color:var(--text-dim);">&plusmn;</span>
+                  <input type="number" id="wl-bw-input" min="0" max="50" step="1" value="0"
+                         style="width:45px;background:rgba(0,0,0,0.3);border:1px solid var(--border);border-radius:3px;color:#fff;font-size:0.65rem;text-align:right;padding:1px 3px;">
+                  <span style="color:var(--text-dim);">nm</span>
+                </div>
+              </div>
+              <input type="range" id="wl-bw-slider" min="0" max="50" step="1" value="0"
+                     aria-label="RGB window half-width in nm" style="height:10px;width:100%;cursor:pointer;">
             </div>
           </div>
 

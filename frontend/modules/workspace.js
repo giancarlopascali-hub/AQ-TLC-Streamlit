@@ -174,15 +174,15 @@ export function resetState(keepImage = true) {
   state.view           = { zoom: 1, dx: 0, dy: 0 };
   state.targetWavelength = null;
   state.wavelengthPreset = 'full';
-  state.wavelengthBandwidth = 25;
+  state.wavelengthBandwidth = 0;
   state.invertColors = false;
 
   const btnInvert = document.getElementById('btn-invert-colors');
   if (btnInvert) btnInvert.classList.remove('active');
   const bwSlider = document.getElementById('wl-bw-slider');
-  if (bwSlider) bwSlider.value = 25;
-  const bwVal = document.getElementById('wl-bw-val');
-  if (bwVal) bwVal.textContent = '25';
+  if (bwSlider) bwSlider.value = 0;
+  const bwInput = document.getElementById('wl-bw-input');
+  if (bwInput) bwInput.value = 0;
   const wlFullBtn = document.getElementById('wl-preset-full');
   if (wlFullBtn) {
     document.querySelectorAll('.wl-preset-btn').forEach(b => b.classList.remove('active'));

@@ -1,5 +1,6 @@
 param(
-    [switch]$KeepBuild
+    [switch]$KeepBuild,
+    [string]$OutputZip
 )
 
 # Run from any directory. A fresh, isolated build prevents installed packages
@@ -7,7 +8,13 @@ param(
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $build = Join-Path $repo '.windows-build'
-$zip = Join-Path ([Environment]::GetFolderPath('Desktop')) 'AQ-TLC-Desktop-v1.0-Windows-x64.zip'
+$zip = if ([string]::IsNullOrWhiteSpace($OutputZip)) {
+    Join-Path ([Environment]::GetFolderPath('Desktop')) 'AQ-TLC-Desktop-v1.0-Windows-x64.zip'
+} else {
+    [System.IO.Path]::GetFullPath($OutputZip)
+}
+if ([System.IO.Path]::GetExtension($zip) -ne '.zip') { throw 'OutputZip must have a .zip extension.' }
+if (-not (Test-Path -LiteralPath (Split-Path -Parent $zip) -PathType Container)) { throw 'OutputZip parent directory does not exist.' }
 if (Test-Path -LiteralPath $build) { throw "Build directory already exists: $build" }
 if (Test-Path -LiteralPath $zip) { throw "Release ZIP already exists: $zip" }
 
@@ -26,7 +33,12 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Executable build failed.' }
 
     $appFolder = Join-Path $build 'dist\AQ-TLC-Desktop'
-    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'README-PACKAGE.txt') -Destination (Join-Path $appFolder 'README.txt')
+    $packageReadme = Join-Path $appFolder 'README.txt'
+    Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'README-PACKAGE.txt') -Destination $packageReadme
+    $commit = (& git rev-parse --short=12 HEAD).Trim()
+    if ($LASTEXITCODE -ne 0) { throw 'Could not determine the build source commit.' }
+    $sourceSuffix = if ((& git status --porcelain).Count -gt 0) { ' (with local changes)' } else { '' }
+    Add-Content -LiteralPath $packageReadme -Value "Build source: $commit$sourceSuffix"
     Compress-Archive -LiteralPath $appFolder -DestinationPath $zip -CompressionLevel Optimal
     Write-Output "Created $zip"
 

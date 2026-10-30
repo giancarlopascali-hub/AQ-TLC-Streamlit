@@ -23,37 +23,14 @@
 
 import { state, $       } from './state.js';
 import { getImageCanvasPos } from './coords.js';
+import { wavelengthWindowToRgb } from './image_filters.js';
 
 let _filterCacheKey = null;
 let _filteredCanvas = null;
 
-function wavelengthToRGB(wavelength) {
-  let r = 0, g = 0, b = 0;
-  if (wavelength >= 380 && wavelength < 440) {
-    r = -(wavelength - 440) / (440 - 380); g = 0; b = 1;
-  } else if (wavelength >= 440 && wavelength < 490) {
-    r = 0; g = (wavelength - 440) / (490 - 440); b = 1;
-  } else if (wavelength >= 490 && wavelength < 510) {
-    r = 0; g = 1; b = -(wavelength - 510) / (510 - 490);
-  } else if (wavelength >= 510 && wavelength < 580) {
-    r = (wavelength - 510) / (580 - 510); g = 1; b = 0;
-  } else if (wavelength >= 580 && wavelength < 645) {
-    r = 1; g = -(wavelength - 645) / (645 - 580); b = 0;
-  } else if (wavelength >= 645 && wavelength <= 750) {
-    r = 1; g = 0; b = 0;
-  }
-  let factor = 1.0;
-  if (wavelength >= 380 && wavelength < 420) {
-    factor = 0.3 + 0.7 * (wavelength - 380) / (420 - 380);
-  } else if (wavelength > 700 && wavelength <= 750) {
-    factor = 0.3 + 0.7 * (750 - wavelength) / (750 - 700);
-  }
-  return { r: r * factor, g: g * factor, b: b * factor };
-}
-
 function getFilteredImageSource() {
   if (!state.imgEl) return null;
-  const currentKey = `${state.imgB64}_${state.targetWavelength}_${state.invertColors}`;
+  const currentKey = `${state.imgB64}_${state.targetWavelength}_${state.wavelengthBandwidth}_${state.invertColors}`;
   if (!state.targetWavelength && !state.invertColors) {
     _filterCacheKey = null;
     _filteredCanvas = null;
@@ -80,7 +57,7 @@ function getFilteredImageSource() {
     const hasWl = state.targetWavelength !== null && state.targetWavelength !== 'full';
 
     if (hasWl) {
-      const spec = wavelengthToRGB(parseFloat(state.targetWavelength));
+      const spec = wavelengthWindowToRgb(state.targetWavelength, state.wavelengthBandwidth);
       r_c = spec.r; g_c = spec.g; b_c = spec.b;
       const sum = r_c + g_c + b_c;
       if (sum > 0) {

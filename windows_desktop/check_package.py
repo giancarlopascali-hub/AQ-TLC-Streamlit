@@ -32,6 +32,8 @@ def main(url: str) -> None:
     assert b"fonts.googleapis.com" not in body  # offline staging
     status, body = request(port, "GET", "/modules/streamlit_bridge.js")
     assert status == 200 and b"fetch('/api'" in body
+    status, body = request(port, "GET", "/modules/image_filters.js")
+    assert status == 200 and b"wavelengthWindowToRgb" in body
 
     image = Image.new("RGB", (64, 96), color=(180, 180, 180))
     for y in range(30, 55):

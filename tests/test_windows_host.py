@@ -58,6 +58,9 @@ class WindowsHostTests(unittest.TestCase):
         status, data = self.request("GET", "/modules/api.js")
         self.assertEqual(status, 200)
         self.assertIn(b"generate_profiles", data)
+        status, data = self.request("GET", "/modules/image_filters.js")
+        self.assertEqual(status, 200)
+        self.assertIn(b"wavelengthWindowToRgb", data)
 
     def test_rejects_cross_origin_and_path_traversal(self) -> None:
         status, _ = self.request("GET", "/%2e%2e/tlc_backend.py")
@@ -75,6 +78,8 @@ class WindowsHostTests(unittest.TestCase):
             "peak_threshold": 50,
             "smooth_sigma": 1.0,
             "polarity_mode": "dark",
+            "target_wavelength": 650,
+            "wavelength_bandwidth": 30,
         }
         message = {"protocol_version": 1, "action": "generate_profiles", "request_id": "profiles-1", "payload": payload}
         status, body = self.request("POST", "/api", body=message)

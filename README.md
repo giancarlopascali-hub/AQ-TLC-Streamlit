@@ -38,7 +38,7 @@ runs the Python analysis and returns correlated responses to the browser.
 - Automatic lane geometry and server-computed densitograms
 - Adjustable polarity, sensitivity, resolution and peak-width presentation
 - Manual peak add, move, resize and delete workflows
-- RGB channel-projection controls and colour inversion
+- RGB channel-projection controls with custom target and adjustable RGB window, and colour inversion
 - Relative, area-calibration and molecular-weight calibration modes
 - Active-lane and multi-lane printable reports
 - Up to 50 in-session undo snapshots with `Ctrl+Z` or `Command+Z`

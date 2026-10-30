@@ -133,12 +133,13 @@
 
       <h3>Image and signal controls</h3>
       <ul>
-        <li><strong>RGB Channel Projection</strong> offers Full RGB, named visual presets and a 380–750 custom weighting.</li>
+        <li><strong>RGB Channel Projection</strong> offers Full RGB, named visual presets and a custom target from 380 to 750 nm. The RGB window control averages the approximate channel weights at each integer nm from target minus window to target plus window (0–50 nm), clipped to the supported range. A zero window keeps the existing single-target weighting; Full RGB ignores the window.</li>
         <li><strong>Invert</strong> reverses image colours and updates the analysed profiles.</li>
+        <li>Changing projection, RGB window or Invert recalculates profiles and runs automatic peak detection again. Manual peak edits are replaced, so finish your filter choice before editing peaks.</li>
         <li><strong>Polarity Mode</strong> selects Default, Dark Spots or Bright Spots to match the plate appearance.</li>
         <li><strong>Sens.</strong> controls how readily weaker peaks are detected; <strong>Res.</strong> controls minimum peak separation; <strong>Width %</strong> controls the threshold used to define each peak's visible and analytical integration boundaries.</li>
       </ul>
-      <div class="callout blue"><strong>RGB projection is image processing, not spectroscopy.</strong> Named wavelength and staining presets are channel-weighting aids; they do not represent a physical optical filter, monochromator or measured spectral bandwidth.</div>
+      <div class="callout blue"><strong>RGB projection is image processing, not spectroscopy.</strong> Named wavelength and staining presets, including the RGB window, combine channels already present in the camera photo. They do not represent a physical optical filter, monochromator or measured spectral bandwidth.</div>
 
       <h3>New versus Reset</h3>
       <ul>

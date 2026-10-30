@@ -23,6 +23,7 @@ import {
   DEFAULT_PEAK_THRESHOLD,
 } from './constants.js';
 import { stReady, stSetHeight } from './streamlit_bridge.js';
+import { wavelengthWindowToRgb } from './image_filters.js';
 
 /**
  * Initializes DOM event listeners, configures tool selection, attaches window
@@ -84,9 +85,9 @@ export function init() {
   $('btn-calc-lanes').onclick = () => calculateLanes();
 
   // -- Polarity Toggle Buttons -------------------------------------------------
-  document.querySelectorAll('.mode-toggle-btn').forEach(btn => {
+  document.querySelectorAll('.mode-toggle-btn[data-mode]').forEach(btn => {
     btn.onclick = () => {
-      document.querySelectorAll('.mode-toggle-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.mode-toggle-btn[data-mode]').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       state.polarityMode = btn.dataset.mode;
       if (state.activeLane) updateDensitograms(true);
@@ -94,70 +95,53 @@ export function init() {
   });
 
   // -- Wavelength Filter Handlers ----------------------------------------------
-  const wavelengthToHex = (wavelength) => {
-    let r = 0, g = 0, b = 0;
-    if (wavelength >= 380 && wavelength < 440) {
-      r = -(wavelength - 440) / (440 - 380); g = 0; b = 1;
-    } else if (wavelength >= 440 && wavelength < 490) {
-      r = 0; g = (wavelength - 440) / (490 - 440); b = 1;
-    } else if (wavelength >= 490 && wavelength < 510) {
-      r = 0; g = 1; b = -(wavelength - 510) / (510 - 490);
-    } else if (wavelength >= 510 && wavelength < 580) {
-      r = (wavelength - 510) / (580 - 510); g = 1; b = 0;
-    } else if (wavelength >= 580 && wavelength < 645) {
-      r = 1; g = -(wavelength - 645) / (645 - 580); b = 0;
-    } else if (wavelength >= 645 && wavelength <= 750) {
-      r = 1; g = 0; b = 0;
-    }
-    const toHex = c => Math.round(c * 255).toString(16).padStart(2, '0');
-    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+  const clampInteger = (value, minimum, maximum, fallback) => {
+    const number = Number(value);
+    return Number.isFinite(number)
+      ? Math.min(maximum, Math.max(minimum, Math.floor(number + 0.5)))
+      : fallback;
   };
-
-  const updateWavelengthSwatch = (wl) => {
+  const updateWavelengthSwatch = () => {
     const swatch = $('wl-swatch');
     if (!swatch) return;
-    if (wl === null || wl === 'full') {
+    if (state.targetWavelength === null) {
       swatch.style.background = '#ffffff';
     } else {
-      swatch.style.background = wavelengthToHex(parseFloat(wl));
+      const { r, g, b } = wavelengthWindowToRgb(state.targetWavelength, state.wavelengthBandwidth);
+      const toHex = channel => Math.round(channel * 255).toString(16).padStart(2, '0');
+      swatch.style.background = `#${toHex(r)}${toHex(g)}${toHex(b)}`;
     }
   };
 
   const wlControls = $('wl-custom-controls');
   const wlSlider   = $('wl-slider');
   const wlInput    = $('wl-num-input');
+  const bwSlider   = $('wl-bw-slider');
+  const bwInput    = $('wl-bw-input');
 
   const updateWlControlsVisibility = () => {
     if (!wlControls) return;
     wlControls.style.display = (state.wavelengthPreset === 'full') ? 'none' : 'flex';
   };
 
-  const setWavelength = (wl, updateInputs = true) => {
+  const setWavelength = (wl) => {
     if (wl === 'full' || wl === null) {
       state.targetWavelength = null;
-      updateWavelengthSwatch(null);
     } else if (wl === 'custom') {
       if (state.targetWavelength === null) {
         state.targetWavelength = 540;
-        if (wlSlider)  wlSlider.value  = 540;
-        if (wlInput)   wlInput.value   = 540;
-        updateWavelengthSwatch(540);
       }
-      updateWlControlsVisibility();
-      render();
-      return;
     } else {
-      const numWl = parseFloat(wl);
-      state.targetWavelength = isNaN(numWl) ? null : numWl;
-      updateWavelengthSwatch(state.targetWavelength);
-      if (updateInputs && state.targetWavelength !== null) {
-        if (wlSlider) wlSlider.value = state.targetWavelength;
-        if (wlInput)  wlInput.value  = state.targetWavelength;
-      }
+      state.targetWavelength = clampInteger(wl, 380, 750, 540);
     }
+    if (state.targetWavelength !== null) {
+      if (wlSlider) wlSlider.value = state.targetWavelength;
+      if (wlInput) wlInput.value = state.targetWavelength;
+    }
+    updateWavelengthSwatch();
     updateWlControlsVisibility();
     render();
-    if (state.lanes.length > 0) updateDensitograms(false);
+    if (state.lanes.length > 0) updateDensitograms(true);
   };
 
   updateWlControlsVisibility();
@@ -168,18 +152,29 @@ export function init() {
       state.invertColors = !state.invertColors;
       btnInvert.classList.toggle('active', state.invertColors);
       render();
-      if (state.lanes.length > 0) updateDensitograms(false);
+      if (state.lanes.length > 0) updateDensitograms(true);
     };
   }
 
-  const bwSlider = $('wl-bw-slider');
   if (bwSlider) {
     bwSlider.oninput = e => {
-      if ($('wl-bw-val')) $('wl-bw-val').textContent = e.target.value;
-      state.wavelengthBandwidth = parseInt(e.target.value, 10);
+      state.wavelengthBandwidth = clampInteger(e.target.value, 0, 50, 0);
+      if (bwInput) bwInput.value = state.wavelengthBandwidth;
+      updateWavelengthSwatch();
+      render();
     };
     bwSlider.onchange = e => {
-      if (state.lanes.length > 0) updateDensitograms(false);
+      if (state.lanes.length > 0) updateDensitograms(true);
+    };
+  }
+  if (bwInput) {
+    bwInput.onchange = e => {
+      state.wavelengthBandwidth = clampInteger(e.target.value, 0, 50, 0);
+      e.target.value = state.wavelengthBandwidth;
+      if (bwSlider) bwSlider.value = state.wavelengthBandwidth;
+      updateWavelengthSwatch();
+      render();
+      if (state.lanes.length > 0) updateDensitograms(true);
     };
   }
 
@@ -194,20 +189,18 @@ export function init() {
   });
 
   const onCustomWlChange = (val) => {
-    const numVal = parseFloat(val);
-    if (isNaN(numVal)) return;
-    const clamped = Math.min(750, Math.max(380, numVal));
+    const clamped = clampInteger(val, 380, 750, 540);
     document.querySelectorAll('.wl-preset-btn').forEach(b => b.classList.remove('active'));
     $('wl-preset-custom')?.classList.add('active');
     state.wavelengthPreset = 'custom';
-    setWavelength(clamped, true);
+    setWavelength(clamped);
   };
 
   if (wlSlider) {
     wlSlider.oninput = e => {
       if (wlInput) wlInput.value = e.target.value;
-      updateWavelengthSwatch(parseFloat(e.target.value));
-      state.targetWavelength = parseFloat(e.target.value);
+      state.targetWavelength = clampInteger(e.target.value, 380, 750, 540);
+      updateWavelengthSwatch();
       render();
     };
     wlSlider.onchange = e => onCustomWlChange(e.target.value);
@@ -215,7 +208,7 @@ export function init() {
 
   if (wlInput) {
     wlInput.onchange = e => {
-      const val = Math.min(750, Math.max(380, parseFloat(e.target.value) || 540));
+      const val = clampInteger(e.target.value, 380, 750, 540);
       wlInput.value = val;
       if (wlSlider) wlSlider.value = val;
       onCustomWlChange(val);
