@@ -131,6 +131,13 @@ export function updateDensitograms(detectPeaks = false) {
   _profileRequestTimer = setTimeout(() => _sendProfileRequest(detectPeaks), 120);
 }
 
+/** Prevent an older profile response from replacing restored or reset lanes. */
+export function cancelPendingProfileRequests() {
+  if (_profileRequestTimer) clearTimeout(_profileRequestTimer);
+  _profileRequestTimer = null;
+  _latestRequestIdByAction.delete('generate_profiles');
+}
+
 function _sendProfileRequest(detectPeaks) {
   if (state.lanes.length === 0 || !state.imgB64) return;
 

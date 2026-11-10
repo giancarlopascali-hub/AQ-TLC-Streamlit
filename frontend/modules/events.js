@@ -11,7 +11,8 @@ import { getPos, getImageCanvasPos, calculateSnappedOriginPosition } from './coo
 import { render } from './render.js';
 import { renderProfiles } from './profiles.js';
 import { saveState, undo, applyCrop } from './workspace.js';
-import { updateDensitograms } from './api.js';
+import { cancelPendingProfileRequests, updateDensitograms } from './api.js';
+import { applyCommonLaneWidth, syncLaneWidthControl } from './lane_width.js';
 
 /**
  * Initializes canvas mouse and wheel listeners, window mousemove/mouseup listeners,
@@ -20,6 +21,8 @@ import { updateDensitograms } from './api.js';
 export function setupCanvasEvents() {
   const canvas = $('canvas-main');
   if (!canvas) return;
+  let laneDragStart = null;
+  let laneMoved = false;
 
   // -- Main Canvas Mouse Down --------------------------------------------------
   canvas.onmousedown = e => {
@@ -56,6 +59,8 @@ export function setupCanvasEvents() {
       } else if (lnHit) {
         saveState();
         state.activeLane = lnHit;
+        laneDragStart = { cx: lnHit.cx, cy: lnHit.cy };
+        laneMoved = false;
         state.activeLine = null;
         state.activeMark = null;
         state.editingField = 'move-lane';
@@ -142,6 +147,10 @@ export function setupCanvasEvents() {
       state.activeLine.cx = p.x;
       state.activeLine.cy = p.y;
     } else if (state.editingField === 'move-lane') {
+      if (!laneMoved && (p.x !== state.activeLane.cx || p.y !== state.activeLane.cy)) {
+        cancelPendingProfileRequests();
+        laneMoved = true;
+      }
       state.activeLane.cx = p.x;
       state.activeLane.cy = p.y;
     } else if (state.editingField === 'resize-line') {
@@ -161,9 +170,20 @@ export function setupCanvasEvents() {
     if (state.activeTool === 'roi' && state.roiRect && Math.abs(state.roiRect.w) > 5) {
       applyCrop();
     }
-    if (state.editingField === 'move-lane') {
-      updateDensitograms();
+    if (state.editingField === 'move-lane' && laneMoved) {
+      const previousWidth = state.laneWidth ?? state.activeLane.w;
+      if (!applyCommonLaneWidth(state, previousWidth)) {
+        // No positive shared width can separate these positions; undo the drag.
+        state.activeLane.cx = laneDragStart.cx;
+        state.activeLane.cy = laneDragStart.cy;
+        applyCommonLaneWidth(state, previousWidth);
+        showToast('These lanes are too close to remain separate. Move the lane farther away.');
+      }
+      syncLaneWidthControl(state);
+      updateDensitograms(state.laneWidth !== previousWidth);
     }
+    laneDragStart = null;
+    laneMoved = false;
     state.dragStart = null;
     state.isPanning = false;
     state.isRotating = false;
@@ -200,6 +220,7 @@ export function setupCanvasEvents() {
           state.activeLane = null;
           changed = true;
           renderProfiles();
+          syncLaneWidthControl(state);
         }
         if (changed) render();
       }
@@ -267,7 +288,10 @@ export function calculateLanes() {
   }
 
   saveState();
+  cancelPendingProfileRequests();
   state.lanes = [];
+  state.activeLane = null;
+  syncLaneWidthControl(state);
   const pool = [...state.lines];
   const pairs = [];
 
@@ -296,11 +320,15 @@ export function calculateLanes() {
 
   if (pairs.length === 0) {
     showToast('Boundary lines could not be paired. Please ensure the Origin line and Solvent Front line are separated vertically.');
+    renderProfiles();
+    render();
     return;
   }
 
   if (state.spottingMarks.length === 0) {
     showToast('Boundary lines detected! Now use the "Marks" tool to click and place Spotting Marks along the Origin line for each sample lane.');
+    renderProfiles();
+    render();
     return;
   }
 
@@ -367,9 +395,20 @@ export function calculateLanes() {
   });
 
   if (state.lanes.length > 0) {
+    const suggestedWidth = Math.min(...state.lanes.map(lane => lane.w));
+    if (!applyCommonLaneWidth(state, state.laneWidth ?? suggestedWidth)) {
+      state.lanes = [];
+      state.activeLane = null;
+      syncLaneWidthControl(state);
+      showToast('Spotting marks are too close for separate lanes. Move them apart and try again.');
+      renderProfiles();
+      render();
+      return;
+    }
     state.activeLane = state.lanes[0];
     renderProfiles();
     updateDensitograms(true);
   }
+  syncLaneWidthControl(state);
   render();
 }

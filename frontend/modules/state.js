@@ -52,6 +52,9 @@ export const state = {
    */
   lanes:          [],
 
+  /** @type {number|null} Shared width of all lanes, in processed-image pixels. */
+  laneWidth:      null,
+
   // -- Active selections --------------------------------------------------
   /**
    * Currently active tool identifier.

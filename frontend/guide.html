@@ -113,7 +113,7 @@
         <div class="step"><b>Prepare the plate</b>Crop away unused background and rotate the plate so the sample lanes run vertically. Do this before adding lines and marks.</div>
         <div class="step"><b>Draw the boundaries</b>Select <strong>Boundary Lines</strong> and drag one line across the origin and another across the solvent front. The origin must be below the front, and the lines must be vertically separated.</div>
         <div class="step"><b>Add sample positions</b>Select <strong>Spotting Marks</strong> and click once at each application position along the origin. Marks placed near the origin snap onto it.</div>
-        <div class="step"><b>Find and inspect lanes</b>Click <strong>Find Lanes</strong>. Blue lane boxes appear and the first lane opens in the analysis panel. Check the geometry and adjust any lane before accepting its profile.</div>
+        <div class="step"><b>Find and inspect lanes</b>Click <strong>Find Lanes</strong>. Blue lane boxes appear and the first lane opens in the analysis panel. Use <strong>Common lane width</strong> to give every lane the same sampling width, up to the displayed safe limit. Profiles and peaks recalculate when you release the slider.</div>
         <div class="step"><b>Quantify and report</b>Refine peaks, choose Relative Intensity, Area Calibration or MW Calibration, enter standards where needed, then export the active lane or a full multi-lane report.</div>
       </div>
       <div class="callout warning"><strong>Session warning:</strong> the Desktop workspace is temporary. Export required reports before refreshing, closing the tab or allowing the Streamlit session to restart. The app does not currently save a project file for later reopening.</div>
@@ -137,6 +137,7 @@
         <li><strong>Invert</strong> reverses image colours and updates the analysed profiles.</li>
         <li>Changing projection, RGB window or Invert recalculates profiles and runs automatic peak detection again. Manual peak edits are replaced, so finish your filter choice before editing peaks.</li>
         <li><strong>Polarity Mode</strong> selects Default, Dark Spots or Bright Spots to match the plate appearance.</li>
+        <li><strong>Common lane width</strong> sets the shared sampling-strip width in processed-image pixels. Its maximum changes with lane positions to prevent overlap or horizontal crop clipping. Adjusting it reruns automatic peak detection and replaces manual peak edits. As with the existing analysis, rotated regions near an image edge may include padded pixels.</li>
         <li><strong>Sens.</strong> controls how readily weaker peaks are detected; <strong>Res.</strong> controls minimum peak separation; <strong>Width %</strong> controls the threshold used to define each peak's visible and analytical integration boundaries.</li>
       </ul>
       <div class="callout blue"><strong>RGB projection is image processing, not spectroscopy.</strong> Named wavelength and staining presets, including the RGB window, combine channels already present in the camera photo. They do not represent a physical optical filter, monochromator or measured spectral bandwidth.</div>

@@ -13,9 +13,10 @@
 import { state, $ } from './state.js';
 import { render } from './render.js';
 import { renderProfiles } from './profiles.js';
-import { registerApiCallbacks, updateDensitograms } from './api.js';
-import { handleFile, resetState } from './workspace.js';
+import { cancelPendingProfileRequests, registerApiCallbacks, updateDensitograms } from './api.js';
+import { handleFile, resetState, saveState } from './workspace.js';
 import { setupCanvasEvents, calculateLanes } from './events.js';
+import { applyCommonLaneWidth, syncLaneWidthControl } from './lane_width.js';
 import { exportReport } from './export.js';
 import {
   DEFAULT_PEAK_PROMINENCE,
@@ -214,6 +215,43 @@ export function init() {
       onCustomWlChange(val);
     };
   }
+
+  // -- Shared Lane Width --------------------------------------------------------
+  const laneWidthSlider = $('lane-width');
+  let laneWidthUndoSaved = false;
+  let laneWidthChanged = false;
+  if (laneWidthSlider) {
+    laneWidthSlider.oninput = e => {
+      if (Number(e.target.value) === state.laneWidth) return;
+      if (!laneWidthUndoSaved) {
+        saveState();
+        cancelPendingProfileRequests();
+        laneWidthUndoSaved = true;
+      }
+      if (applyCommonLaneWidth(state, e.target.value)) {
+        laneWidthChanged = true;
+        syncLaneWidthControl(state);
+        render();
+      }
+    };
+    laneWidthSlider.onchange = e => {
+      if (Number(e.target.value) !== state.laneWidth) {
+        if (!laneWidthUndoSaved) {
+          saveState();
+          cancelPendingProfileRequests();
+        }
+        if (applyCommonLaneWidth(state, e.target.value)) {
+          laneWidthChanged = true;
+          syncLaneWidthControl(state);
+          render();
+        }
+      }
+      laneWidthUndoSaved = false;
+      if (laneWidthChanged && state.lanes.length) updateDensitograms(true);
+      laneWidthChanged = false;
+    };
+  }
+  syncLaneWidthControl(state);
 
   // -- Peak Integration Sliders -------------------------------------------------
   $('peak-prominence').oninput = e => {

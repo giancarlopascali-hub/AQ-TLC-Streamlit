@@ -105,6 +105,35 @@ def test_profile_response_has_explicit_analysis_contract() -> None:
         assert peak["area"] >= 0
 
 
+def test_lane_width_changes_the_sampled_profile() -> None:
+    image = Image.new("RGB", (64, 96), color=(180, 180, 180))
+    for y in range(25, 35):
+        for x in range(29, 35):
+            image.putpixel((x, y), (40, 40, 40))
+    for y in range(55, 65):
+        for x in range(17, 23):
+            image.putpixel((x, y), (40, 40, 40))
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    data_url = "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
+    payload = {
+        "image": data_url,
+        "peak_detection": False,
+        "polarity_mode": "dark",
+        "smooth_sigma": 1,
+    }
+    narrow = tlc_backend.generate_profiles({
+        **payload,
+        "lanes": [{"id": 1, "cx": 32, "cy": 48, "w": 8, "h": 80, "angle": 0}],
+    })["results"][0]
+    wide = tlc_backend.generate_profiles({
+        **payload,
+        "lanes": [{"id": 1, "cx": 32, "cy": 48, "w": 40, "h": 80, "angle": 0}],
+    })["results"][0]
+    assert narrow["profile_analysis"] != wide["profile_analysis"]
+    assert max(wide["profile_analysis"][20:35]) > max(narrow["profile_analysis"][20:35])
+
+
 def test_width_threshold_is_the_authoritative_integration_interval() -> None:
     import numpy as np
 

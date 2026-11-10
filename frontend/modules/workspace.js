@@ -19,6 +19,8 @@ import { UNDO_STACK_LIMIT } from './constants.js';
 import { render           } from './render.js';
 import { renderProfiles   } from './profiles.js';
 import { stSend, stOnRender, stSetHeight } from './streamlit_bridge.js';
+import { cancelPendingProfileRequests, updateDensitograms } from './api.js';
+import { syncLaneWidthControl } from './lane_width.js';
 
 // -- Crop response counter -----------------------------------------------------
 let _cropReqCounter = 0;
@@ -62,6 +64,7 @@ export function saveState() {
   const snapshot = {
     lines:   JSON.parse(JSON.stringify(state.lines)),
     lanes:   JSON.parse(JSON.stringify(state.lanes)),
+    laneWidth: state.laneWidth,
     marks:   JSON.parse(JSON.stringify(state.spottingMarks)),
     rot:     state.imageRotation,
     img:     state.imgB64,
@@ -82,9 +85,13 @@ export function saveState() {
 export function undo() {
   if (state.undoStack.length === 0) return;
 
+  cancelPendingProfileRequests();
+  const activeLaneId = state.activeLane?.id;
   const snapshot = state.undoStack.pop();
   state.lines          = snapshot.lines;
   state.lanes          = snapshot.lanes;
+  state.laneWidth      = snapshot.laneWidth ?? (snapshot.lanes[0]?.w ?? null);
+  state.activeLane     = state.lanes.find(lane => lane.id === activeLaneId) || state.lanes[0] || null;
   state.spottingMarks  = snapshot.marks;
   state.imageRotation  = snapshot.rot;
 
@@ -97,8 +104,10 @@ export function undo() {
     img.src      = snapshot.img;
   }
 
+  syncLaneWidthControl(state);
   renderProfiles();
   render();
+  if (state.lanes.some(lane => !lane.profile_analysis?.length)) updateDensitograms(true);
 }
 
 // ----------------------------------------------------------------------------
@@ -113,6 +122,7 @@ export function undo() {
  */
 export function handleFile(file) {
   if (!file) return;
+  cancelPendingProfileRequests();
 
   const reader    = new FileReader();
   reader.onload   = e => {
@@ -136,12 +146,14 @@ export function handleFile(file) {
 
       state.lines          = [];
       state.lanes          = [];
+      state.laneWidth      = null;
       state.spottingMarks  = [];
       state.activeLine     = null;
       state.activeLane     = null;
       state.activeMark     = null;
       $('file-input-prompter').value   = '';
 
+      syncLaneWidthControl(state);
       renderProfiles();
       render();
       stSetHeight();
@@ -163,8 +175,10 @@ export function handleFile(file) {
  *   false ? hard reset (return to upload screen).
  */
 export function resetState(keepImage = true) {
+  cancelPendingProfileRequests();
   state.lines          = [];
   state.lanes          = [];
+  state.laneWidth      = null;
   state.spottingMarks  = [];
   state.roiRect        = null;
   state.activeLine     = null;
@@ -176,6 +190,7 @@ export function resetState(keepImage = true) {
   state.wavelengthPreset = 'full';
   state.wavelengthBandwidth = 0;
   state.invertColors = false;
+  syncLaneWidthControl(state);
 
   const btnInvert = document.getElementById('btn-invert-colors');
   if (btnInvert) btnInvert.classList.remove('active');
