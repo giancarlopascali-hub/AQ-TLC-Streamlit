@@ -55,7 +55,13 @@ st.markdown(
         header     { visibility: hidden; }
         section[data-testid="stSidebar"] { display: none; }
         .block-container { padding: 0 !important; max-width: 100% !important; }
-        iframe[title="aq_tlc.aq_tlc"] { border: none; }
+        iframe[title$=".aq_tlc"] {
+            border: none;
+            display: block;
+            /* Keep the component within the visible Streamlit page. */
+            height: calc(100vh - 1.5rem) !important;
+            height: calc(100dvh - 1.5rem) !important;
+        }
     </style>
     """,
     unsafe_allow_html=True,
@@ -86,9 +92,8 @@ if "processed_request_ids" not in st.session_state:
 # ---------------------------------------------------------------------------
 # Render the component
 # ---------------------------------------------------------------------------
-# Height: fill the viewport. Streamlit Cloud viewport is typically ~900px.
-# The component's inline script calls stSetHeight(window.innerHeight) on load,
-# but we pass a generous default here so the iframe is never clipped.
+# Streamlit needs an initial component height before its first render. The CSS
+# above fits the actual iframe to the visible viewport after it mounts.
 component_value = _component_func(
     response=st.session_state.pending_response,
     key="aq_tlc_main",
