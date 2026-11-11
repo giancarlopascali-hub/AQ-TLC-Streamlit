@@ -76,14 +76,19 @@ Run this test on the deployed URL:
 4. Move a lane and verify its profile updates.
 5. Change RGB projection, custom target, RGB window, Invert, polarity, sensitivity, resolution and width;
    confirm the image/profile response matches the selected controls.
-6. Add, move, resize and right-click-delete a manual peak; confirm area, Rf
+6. Set Shoulder sensitivity above zero on a plate with a close doublet. Check the
+   measured trace, fitted components, and each Split/Keep single choice. Verify
+   that the split component areas sum to the measured cluster area and that the
+   peak table and exported report show the same decision and values. Set the
+   slider back to zero and confirm ordinary peak detection returns.
+7. Add, move, resize and right-click-delete a manual peak; confirm area, Rf
    and table values update together.
-7. Check Relative, Area Calibration and MW Calibration modes, including valid
+8. Check Relative, Area Calibration and MW Calibration modes, including valid
    and missing standards.
-8. Export the active lane and a full report, then verify Print/Save as PDF.
-9. Refresh only after reports are saved; confirm the documented temporary
+9. Export the active lane and a full report, then verify Print/Save as PDF.
+10. Refresh only after reports are saved; confirm the documented temporary
    session behaviour is understood.
-10. Test a cold start after hibernation and a deliberate app reboot.
+11. Test a cold start after hibernation and a deliberate app reboot.
 
 ## Routine updates
 

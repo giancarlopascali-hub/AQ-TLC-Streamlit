@@ -24,6 +24,7 @@
 import { state, $       } from './state.js';
 import { getImageCanvasPos } from './coords.js';
 import { wavelengthWindowToRgb } from './image_filters.js';
+import { fitGroups, fitIntegrationSegments, isFittedPeak } from './shoulder.js';
 
 let _filterCacheKey = null;
 let _filteredCanvas = null;
@@ -261,8 +262,8 @@ export function render() {
     // Gold (#ffd700) for auto-detected peaks, red (#e34c26) for manually adjusted.
     // Bands are more opaque when the lane is active for clearer visual feedback.
     const n = (l.profile || []).length;
-    if (n > 1) {
-      (l.peaks || []).forEach(pk => {
+    if (n > 1 && !state.isProfileStale) {
+      (l.peaks || []).filter(pk => !isFittedPeak(pk)).forEach(pk => {
         const lb = pk.display_lb ?? pk.area_lb ?? pk.lb ?? Math.max(0, pk.idx - 5);
         const rb = pk.display_rb ?? pk.area_rb ?? pk.rb ?? Math.min(n - 1, pk.idx + 5);
 
@@ -289,6 +290,20 @@ export function render() {
         ctx.lineWidth   = 1 / state.view.zoom;
         ctx.beginPath(); ctx.moveTo(-(l.w * sx) / 2, y_top); ctx.lineTo((l.w * sx) / 2, y_top); ctx.stroke();
         ctx.beginPath(); ctx.moveTo(-(l.w * sx) / 2, y_bot); ctx.lineTo((l.w * sx) / 2, y_bot); ctx.stroke();
+      });
+      // A fitted pair partitions one measured envelope. Highlight that
+      // envelope once, instead of painting two overlapping integration bands.
+      fitGroups(l).filter(group => group.active === true).forEach(group => {
+        fitIntegrationSegments(group).forEach(segment => {
+          const yTop = (0.5 - segment.rb / (n - 1)) * l.h * sx;
+          const yBottom = (0.5 - segment.lb / (n - 1)) * l.h * sx;
+          ctx.fillStyle = isActive ? 'rgba(194,151,255,0.24)' : 'rgba(194,151,255,0.12)';
+          ctx.fillRect(-(l.w * sx) / 2, yTop, l.w * sx, yBottom - yTop);
+          ctx.strokeStyle = isActive ? 'rgba(194,151,255,0.75)' : 'rgba(194,151,255,0.35)';
+          ctx.lineWidth = 1 / state.view.zoom;
+          ctx.beginPath(); ctx.moveTo(-(l.w * sx) / 2, yTop); ctx.lineTo((l.w * sx) / 2, yTop); ctx.stroke();
+          ctx.beginPath(); ctx.moveTo(-(l.w * sx) / 2, yBottom); ctx.lineTo((l.w * sx) / 2, yBottom); ctx.stroke();
+        });
       });
     }
 

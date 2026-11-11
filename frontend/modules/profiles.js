@@ -29,9 +29,11 @@
 import { state, $                                          } from './state.js';
 import { calculateRf, calculatePeakArea, findPeakBounds,
          calculateCalibrationCurve, calculateMWCalibrationCurve } from './analysis.js';
-import { updateDensitograms                                } from './api.js';
+import { cancelPendingProfileRequests, updateDensitograms  } from './api.js';
 import { render                                            } from './render.js';
 import { saveState                                         } from './workspace.js';
+import { analysisReady, applyFitDecision, fitCurveSeries, fitGroups, fitIntegrationSegments,
+         invalidateKeptFitGroup, isFittedPeak, isInsideActiveFit, overlapsActiveFit } from './shoulder.js';
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -161,34 +163,12 @@ export function renderProfiles() {
  * @param {Object} l - The active lane object.
  * @returns {string} HTML string.
  */
-function buildPanelHeader(l) {
+export function buildPanelHeader(l) {
   const method = state.integrationMethod;
-
-  return `
-    <div style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center">
-      <input type="text" id="lane-name-input" value="${escapeHtml(l.name || 'Lane ' + l.id)}"
-             style="background:transparent; border:none; color:white; font-family:Outfit;
-                    font-size:1.2rem; font-weight:700; width:150px">
-      <div style="display:flex; gap:6px">
-        <button id="btn-export-lane" class="action-btn secondary"
-                style="font-size:0.75rem; padding:4px 10px" title="Export this active lane">
-          &#128196; Export Lane
-        </button>
-        <button id="btn-export-all" class="action-btn primary"
-                style="font-size:0.75rem; padding:4px 10px" title="Export all detected lanes">
-          &#128218; Full Report
-        </button>
-      </div>
-    </div>
-
-    <div style="margin-bottom:10px; display:flex; gap:6px; flex-wrap:wrap;">
-      <button id="btn-delete-peaks"    class="action-btn secondary" style="font-size:0.65rem; padding:3px 8px" title="Delete all detected peaks in this lane">&#128465;&#65039; Delete all peaks</button>
-      <button id="btn-reset-integ"     class="action-btn secondary" style="font-size:0.65rem; padding:3px 8px" title="Re-run automated peak detection for this lane">&#128259; Reset integration</button>
-      <button id="btn-reset-chartview" class="action-btn secondary" style="font-size:0.65rem; padding:3px 8px" title="Reset chart zoom and pan">&#127919; Reset view</button>
-    </div>
-
+  const analysisContent = analysisReady(state) ? `
     <canvas id="chart-active" style="width:100%; height:280px; background:#010409;
             border:1px solid var(--border); border-radius:8px; cursor:crosshair"></canvas>
+    ${buildFitGroupsHTML(l)}
 
     <div class="integration-table-wrap" style="margin-top:20px">
       <div class="tabs-nav">
@@ -197,8 +177,92 @@ function buildPanelHeader(l) {
         <button class="tab-btn ${method === 'mw_calibration'? 'active' : ''}" data-method="mw_calibration">MW Calibration</button>
       </div>
       ${buildPeakTable(l)}
+    </div>` : '';
+
+  return `
+    <div style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center">
+      <input type="text" id="lane-name-input" value="${escapeHtml(l.name || 'Lane ' + l.id)}"
+             style="background:transparent; border:none; color:white; font-family:Outfit;
+                    font-size:1.2rem; font-weight:700; width:150px">
+      <div style="display:flex; gap:6px">
+        <button id="btn-export-lane" class="action-btn secondary"
+                style="font-size:0.75rem; padding:4px 10px" title="Export this active lane" ${analysisReady(state) ? '' : 'disabled'}>
+          &#128196; Export Lane
+        </button>
+        <button id="btn-export-all" class="action-btn primary"
+                style="font-size:0.75rem; padding:4px 10px" title="Export all detected lanes" ${analysisReady(state) ? '' : 'disabled'}>
+          &#128218; Full Report
+        </button>
+      </div>
     </div>
+
+    ${!analysisReady(state) ? `<div class="analysis-pending">${state.isProfilePending ? 'Updating analysis…' : 'Analysis needs refresh. Choose Reset integration to retry.'}</div>` : ''}
+
+    <div style="margin-bottom:10px; display:flex; gap:6px; flex-wrap:wrap;">
+      <button id="btn-delete-peaks"    class="action-btn secondary" style="font-size:0.65rem; padding:3px 8px" title="Delete all detected peaks in this lane">&#128465;&#65039; Delete all peaks</button>
+      <button id="btn-reset-integ"     class="action-btn secondary" style="font-size:0.65rem; padding:3px 8px" title="Re-run automated peak detection for this lane">&#128259; Reset integration</button>
+      <button id="btn-reset-chartview" class="action-btn secondary" style="font-size:0.65rem; padding:3px 8px" title="Reset chart zoom and pan">&#127919; Reset view</button>
+    </div>
+
+    ${analysisContent}
   `;
+}
+
+function metric(value, digits = 2) {
+  return Number.isFinite(value) ? Number(value).toFixed(digits) : '—';
+}
+
+/** A fit is a reviewable interpretation of the measured trace, not a new signal. */
+export function buildFitGroupsHTML(lane, isExport = false) {
+  if (state.shoulderSensitivity === 0) return '';
+  const groups = fitGroups(lane);
+  if (!groups.length) {
+    return isExport ? '' : '<p class="fit-empty">No shoulder candidates at this sensitivity.</p>';
+  }
+  const cards = groups.map(group => {
+    const quality = group.quality || {};
+    const resolved = group.status === 'resolved';
+    const decision = resolved && group.decision === 'split' ? 'split' : 'keep';
+    const rf = Number.isFinite(group.original_peak?.rf) ? Number(group.original_peak.rf).toFixed(3) : '—';
+    const allocatedSum = Array.isArray(group.components) && group.components.length
+      ? group.components.reduce((sum, component) => sum + (Number(component.area) || 0), 0)
+      : NaN;
+    const details = [
+      `Measured cluster ${metric(group.measured_cluster_area, 1)} AU (${fitIntegrationSegments(group).length} Width ${metric(group.width_threshold, 0)}% component window${fitIntegrationSegments(group).length === 1 ? '' : 's'})`,
+      `Allocated sum ${metric(allocatedSum, 1)} AU`,
+      `Noise ${metric(quality.noise)} AU`,
+      `RMSE ${metric(quality.rmse_single)} → ${metric(quality.rmse_double)} AU`,
+      `Improvement ${Number.isFinite(quality.improvement) ? metric(quality.improvement * 100, 1) + '%' : '—'}`,
+      `Separation ${metric(quality.separation, 1)} samples`,
+      `ΔAICc ${metric(quality.aicc_delta, 1)}`,
+      `Weaker share ${Number.isFinite(quality.component_share) ? metric(quality.component_share * 100, 1) + '%' : '—'}`,
+      `S/N ${metric(quality.snr, 1)}`,
+    ].join(' · ');
+    const buttons = isExport ? '' : resolved ? `
+      <div class="fit-choice" role="group" aria-label="Shoulder decision near Rf ${rf}">
+        <button type="button" data-action="fit-decision" data-group-id="${escapeHtml(group.id)}" ${state.isProfilePending ? 'disabled' : ''}
+                data-decision="split" aria-pressed="${decision === 'split'}"
+                class="${decision === 'split' ? 'active' : ''}">Split</button>
+        <button type="button" data-action="fit-decision" data-group-id="${escapeHtml(group.id)}" ${state.isProfilePending ? 'disabled' : ''}
+                data-decision="keep" aria-pressed="${decision === 'keep'}"
+                class="${decision === 'keep' ? 'active' : ''}">Keep single</button>
+      </div>` : '<span class="fit-unresolved">Keep single · unresolved</span>';
+    const status = state.isProfilePending ? 'Recalculating…' : resolved
+      ? (decision === 'split' ? 'Split applied' : 'Single peak retained; split preview only')
+      : 'Unresolved; single peak retained';
+    return `<div class="fit-card">
+      <div class="fit-card-head"><strong>Shoulder near Rf ${rf}</strong><span>${status}</span></div>
+      ${buttons}
+      <div class="fit-diagnostics">${escapeHtml(details)}</div>
+      ${group.reason && group.reason !== 'accepted' ? `<div class="fit-reason">${escapeHtml(group.reason)}</div>` : ''}
+    </div>`;
+  }).join('');
+  const legend = groups.some(group => group.status === 'resolved')
+    ? '<div class="fit-legend"><span class="measured">Measured</span><span class="total">Fit total</span><span class="component">Fitted components</span></div>'
+    : '';
+  return `<div class="fit-groups">${legend}${cards}
+    <p class="fit-provenance">Fitted components are read-only. Use Keep single to edit the ordinary peak, or adjust shoulder sensitivity to refit.</p>
+  </div>`;
 }
 
 /**
@@ -217,10 +281,10 @@ function buildPeakTable(l) {
 
   // Build column headers based on integration mode
   const headers = method === 'mw_calibration'
-    ? `<th style="text-align:left">Peak</th><th style="text-align:center">Rf</th><th style="text-align:right">Area</th><th style="text-align:center">Type</th><th style="text-align:right">MW (kDa)</th>`
+    ? `<th style="text-align:left">Peak</th><th style="text-align:center">Rf</th><th style="text-align:right">Area (AU)</th><th style="text-align:center">Type</th><th style="text-align:right">MW (kDa)</th>`
     : method === 'calibration'
-    ? `<th style="text-align:left">Peak</th><th style="text-align:center">Rf</th><th style="text-align:right">Area</th><th style="text-align:center">Type</th><th style="text-align:right">Value</th>`
-    : `<th style="text-align:left">Peak</th><th style="text-align:center">Rf</th><th style="text-align:right">Area</th><th style="text-align:right">%</th><th style="text-align:center">Abs Ratio</th><th style="text-align:right">% Corr.</th>`;
+    ? `<th style="text-align:left">Peak</th><th style="text-align:center">Rf</th><th style="text-align:right">Area (AU)</th><th style="text-align:center">Type</th><th style="text-align:right">Value</th>`
+    : `<th style="text-align:left">Peak</th><th style="text-align:center">Rf</th><th style="text-align:right">Area (AU)</th><th style="text-align:right">%</th><th style="text-align:center">Abs Ratio</th><th style="text-align:right">% Corr.</th>`;
 
   const rows = peaks.map((pk, i) =>
     generatePeakRowHTML(pk, i, method, { totalArea, totalCorr, calCurve, mwCurve })
@@ -231,6 +295,7 @@ function buildPeakTable(l) {
       <thead><tr style="border-bottom:2px solid var(--border)">${headers}</tr></thead>
       <tbody id="peak-table-body">${rows}</tbody>
     </table>
+    ${peaks.some(isFittedPeak) ? '<p class="fit-table-note">Model-allocated areas partition the summed measured Width%-controlled component windows. Each row also shows its model integral over those windows.</p>' : ''}
   `;
 }
 
@@ -279,12 +344,17 @@ export function generatePeakRowHTML(pk, i, method, opts = {}) {
   const nameAttr  = isExport ? '' : `data-action="set-peak-name" data-idx="${i}"`;
 
   // Shared peak name cell
-  const nameCell = `
+  const nameCell = isExport ? `<td style="color:${nameColor}; font-weight:600">${escapeHtml(pk.name || '#' + (i + 1))}</td>` : `
     <td style="color:${nameColor}; font-weight:600">
       <input type="text" value="${escapeHtml(pk.name || '#' + (i + 1))}"
              style="background:transparent; border:none; color:inherit; width:60px"
              ${nameAttr}>
     </td>`;
+
+  const areaDisplay = Number(pk.area || 0).toLocaleString(undefined, { maximumFractionDigits: 1 });
+  const areaCell = isFittedPeak(pk)
+    ? `<td style="text-align:right">${areaDisplay}<small class="fit-area-label" title="Model integral: ${metric(pk.fit_area, 1)} AU">Model allocated · fit ${metric(pk.fit_area, 1)} AU</small></td>`
+    : `<td style="text-align:right">${areaDisplay}</td>`;
 
   // Type-switch cell (S / N / A) - used by calibration modes
   const typeSwitchCell = (showInteractive) => `
@@ -323,8 +393,7 @@ export function generatePeakRowHTML(pk, i, method, opts = {}) {
       const mwStr   = mwVal !== null ? mwVal.toFixed(1) : '<span style="font-size:0.6rem; opacity:0.6">Need 2+ S</span>';
       mwCell = `<td style="text-align:right"><span style="color:#58a6ff; font-weight:700">${mwStr}</span></td>`;
     }
-    const areaDisplay = pk.area.toLocaleString(undefined, { maximumFractionDigits: 1 });
-    return `<tr style="${rowStyle}">${nameCell}<td style="text-align:center">${rfDisplay}</td><td style="text-align:right">${areaDisplay}</td>${typeCell}${mwCell}</tr>`;
+    return `<tr style="${rowStyle}">${nameCell}<td style="text-align:center">${rfDisplay}</td>${areaCell}${typeCell}${mwCell}</tr>`;
   }
 
   // -- Area Calibration mode --------------------------------------------------
@@ -345,14 +414,12 @@ export function generatePeakRowHTML(pk, i, method, opts = {}) {
       const calVal = calCurve ? calCurve(pk.area) : null;
       valCell = `<td style="text-align:right"><span style="color:#238636; font-weight:700">${calVal !== null ? calVal.toFixed(2) : '-'}</span></td>`;
     }
-    const areaDisplay = pk.area.toLocaleString(undefined, { maximumFractionDigits: 1 });
-    return `<tr style="${rowStyle}">${nameCell}<td style="text-align:center">${rfDisplay}</td><td style="text-align:right">${areaDisplay}</td>${typeCell}${valCell}</tr>`;
+    return `<tr style="${rowStyle}">${nameCell}<td style="text-align:center">${rfDisplay}</td>${areaCell}${typeCell}${valCell}</tr>`;
   }
 
   // -- Relative Intensity mode (default) --------------------------------------
   const pctArea = totalArea > 0 ? ((pk.area / totalArea) * 100).toFixed(1) : 0;
   const pctCorr = totalCorr > 0 ? ((corrArea / totalCorr) * 100).toFixed(1) : 0;
-  const areaDisplay = pk.area.toLocaleString(undefined, { maximumFractionDigits: 1 });
 
   const absRatioCell = isExport
     ? `<td style="text-align:center">${pk.absRatio || 1}</td>`
@@ -366,7 +433,7 @@ export function generatePeakRowHTML(pk, i, method, opts = {}) {
   return `<tr style="${rowStyle}">
     ${nameCell}
     <td style="text-align:center">${rfDisplay}</td>
-    <td style="text-align:right">${areaDisplay}</td>
+    ${areaCell}
     <td style="text-align:right; font-weight:700">${pctArea}%</td>
     ${absRatioCell}
     <td style="text-align:right; font-weight:700; color:#58a6ff">${pctCorr}%</td>
@@ -407,8 +474,28 @@ function attachPanelEvents(container, l) {
 
   // Delete all peaks in the active lane (with undo support)
   container.querySelector('#btn-delete-peaks')?.addEventListener('click', () => {
+    if (!analysisReady(state)) return;
     saveState();
     state.activeLane.peaks = [];
+    state.activeLane.fit_groups = [];
+    renderProfiles();
+    render();
+  });
+
+  container.querySelector('.fit-groups')?.addEventListener('click', event => {
+    const button = event.target.closest('[data-action="fit-decision"]');
+    if (!button) return;
+    const group = fitGroups(l).find(item => item.id === button.dataset.groupId);
+    const decision = button.dataset.decision;
+    if (!analysisReady(state) || !group || group.status !== 'resolved' || !['split', 'keep'].includes(decision)
+        || group.decision === decision) return;
+    saveState();
+    cancelPendingProfileRequests();
+    if (!applyFitDecision(l, group.id, decision)) {
+      state.undoStack.pop();
+      return;
+    }
+    state.fitOverrides[group.id] = decision;
     renderProfiles();
     render();
   });
@@ -446,12 +533,13 @@ function attachPanelEvents(container, l) {
  * @param {HTMLElement} container - The panel container element.
  * @param {Object}      l         - The active lane object.
  */
-function attachTableEvents(container, l) {
+export function attachTableEvents(container, l) {
   const tbody = container.querySelector('#peak-table-body');
   if (!tbody) return;
 
   // -- Type switch clicks (S / N / A) ----------------------------------------
   tbody.addEventListener('click', e => {
+    if (!analysisReady(state)) return;
     const el = e.target.closest('[data-action="set-peak-type"]');
     if (!el) return;
     const idx = parseInt(el.dataset.idx, 10);
@@ -462,6 +550,7 @@ function attachTableEvents(container, l) {
 
   // -- Input field changes (MW, calibration value, abs ratio, peak name) ----
   tbody.addEventListener('change', e => {
+    if (!analysisReady(state)) return;
     const el  = e.target;
     const idx = parseInt(el.dataset.idx, 10);
 
@@ -514,8 +603,18 @@ export function drawProfileChart(cv, l) {
   const p = getAnalysisProfile(l);
   if (p.length === 0) return;
 
-  const minV  = Math.min(...p);
-  const maxV  = Math.max(...p);
+  const fittedSeries = fitGroups(l)
+    .filter(group => group.status === 'resolved')
+    .map(group => ({ group, series: fitCurveSeries(group, p.length) }))
+    .filter(item => item.series);
+  let minV = Infinity;
+  let maxV = -Infinity;
+  const includeRange = value => { minV = Math.min(minV, value); maxV = Math.max(maxV, value); };
+  p.forEach(includeRange);
+  fittedSeries.forEach(({ series }) => {
+    series.total.forEach(includeRange);
+    series.components.forEach(component => component.curve.forEach(includeRange));
+  });
   const range = (maxV - minV) || 1;
 
   // Chart padding (pixels) - provides space for axis labels and handles
@@ -558,6 +657,15 @@ export function drawProfileChart(cv, l) {
   ctx.fillStyle = 'rgba(31, 111, 235, 0.15)';
   ctx.fill();
 
+  fitGroups(l).filter(group => group.active === true).forEach(group => {
+    fitIntegrationSegments(group).forEach(segment => {
+      const x0 = PAD_L + ((segment.lb / (p.length - 1)) * z + off) * plotW;
+      const x1 = PAD_L + ((segment.rb / (p.length - 1)) * z + off) * plotW;
+      ctx.fillStyle = 'rgba(194,151,255,0.14)';
+      ctx.fillRect(x0, PAD_T, x1 - x0, plotH);
+    });
+  });
+
   // -- Signal line -----------------------------------------------------------
   ctx.beginPath();
   ctx.strokeStyle = '#58a6ff';
@@ -567,16 +675,20 @@ export function drawProfileChart(cv, l) {
 
   // -- Peak integration windows ----------------------------------------------
   (l.peaks || []).forEach(pk => {
-    ensurePeakBounds(pk, p.length);
+    const fitted = isFittedPeak(pk);
+    if (!fitted) ensurePeakBounds(pk, p.length);
     const apexX  = PAD_L + ((pk.idx / (p.length - 1)) * z + off) * plotW;
     const apexHeight = Number.isFinite(pk.height_analysis) ? pk.height_analysis : p[pk.idx];
     const apexY  = PAD_T + (1 - (apexHeight - minV) / range) * plotH;
-    const lb_x   = PAD_L + ((areaLeft(pk)  / (p.length - 1)) * z + off) * plotW;
-    const rb_x   = PAD_L + ((areaRight(pk) / (p.length - 1)) * z + off) * plotW;
+    const lb_x   = fitted ? null : PAD_L + ((areaLeft(pk)  / (p.length - 1)) * z + off) * plotW;
+    const rb_x   = fitted ? null : PAD_L + ((areaRight(pk) / (p.length - 1)) * z + off) * plotW;
 
     // Green for standards ('S'), red for manual/added/modified, yellow for all others
     let color, rgbaFill, rgbaLine;
-    if (pk.type === 'S') {
+    if (fitted) {
+      color    = '#c297ff';
+      rgbaLine = 'rgba(194, 151, 255, 0.8)';
+    } else if (pk.type === 'S') {
       color    = '#2ea043';
       rgbaFill = 'rgba(46, 160, 67, 0.25)';
       rgbaLine = 'rgba(46, 160, 67, 0.7)';
@@ -592,21 +704,21 @@ export function drawProfileChart(cv, l) {
 
     // The fill, edge lines, and drag handles all use the one Width-controlled
     // interval that is also used for AUC.
-    ctx.fillStyle = rgbaFill;
-    ctx.fillRect(lb_x, PAD_T, rb_x - lb_x, plotH);
+    if (!fitted) {
+      ctx.fillStyle = rgbaFill;
+      ctx.fillRect(lb_x, PAD_T, rb_x - lb_x, plotH);
 
-    // Boundary edge lines
-    ctx.strokeStyle = rgbaLine;
-    ctx.lineWidth   = 2;
-    ctx.beginPath(); ctx.moveTo(lb_x, PAD_T); ctx.lineTo(lb_x, PAD_T + plotH); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(rb_x, PAD_T); ctx.lineTo(rb_x, PAD_T + plotH); ctx.stroke();
-
-    // Drag handles - circular dots at mid-height of boundary lines
-    ctx.beginPath();
-    ctx.arc(lb_x, PAD_T + plotH / 2, 4, 0, Math.PI * 2);
-    ctx.arc(rb_x, PAD_T + plotH / 2, 4, 0, Math.PI * 2);
-    ctx.fillStyle = rgbaLine;
-    ctx.fill();
+      // Boundary edge lines and draggable handles apply only to direct areas.
+      ctx.strokeStyle = rgbaLine;
+      ctx.lineWidth   = 2;
+      ctx.beginPath(); ctx.moveTo(lb_x, PAD_T); ctx.lineTo(lb_x, PAD_T + plotH); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(rb_x, PAD_T); ctx.lineTo(rb_x, PAD_T + plotH); ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(lb_x, PAD_T + plotH / 2, 4, 0, Math.PI * 2);
+      ctx.arc(rb_x, PAD_T + plotH / 2, 4, 0, Math.PI * 2);
+      ctx.fillStyle = rgbaLine;
+      ctx.fill();
+    }
 
     // Apex dashed vertical line
     ctx.setLineDash([5, 3]);
@@ -627,7 +739,35 @@ export function drawProfileChart(cv, l) {
     ctx.font        = 'bold 10px Roboto Mono';
     ctx.fillStyle   = color;
     ctx.textAlign   = 'center';
-    ctx.fillText((pk.manual ? '*' : '') + pk.rf.toFixed(2), apexX, apexY - 12);
+    ctx.fillText((fitted ? 'fit ' : pk.manual ? '*' : '') + pk.rf.toFixed(2), apexX, apexY - 12);
+  });
+
+  // Model curves are drawn over the measured trace. Kept candidates remain a
+  // dashed preview; their components are never treated as measured points.
+  const strokeFit = (values, firstIndex, color, width, dashed, opacity) => {
+    ctx.beginPath();
+    ctx.globalAlpha = opacity;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.setLineDash(dashed ? [7, 5] : []);
+    values.forEach((value, offset) => {
+      const index = firstIndex + offset;
+      const x = PAD_L + ((index / (p.length - 1)) * z + off) * plotW;
+      const y = PAD_T + (1 - (value - minV) / range) * plotH;
+      if (offset === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+  };
+  fittedSeries.forEach(({ group, series }) => {
+    const preview = group.active !== true;
+    strokeFit(series.total, series.lb, '#70e1d0', 2.5, preview, preview ? 0.65 : 1);
+    series.components.forEach((component, index) => {
+      strokeFit(component.curve, series.lb, index % 2 ? '#ffb86b' : '#c297ff',
+        1.8, true, preview ? 0.55 : 0.95);
+    });
   });
 
   ctx.restore(); // remove clip
@@ -658,7 +798,7 @@ export function drawProfileChart(cv, l) {
  * @param {HTMLCanvasElement} cv - The chart canvas element.
  * @param {Object}            l  - The active lane object.
  */
-function setupChartInteractions(cv, l) {
+export function setupChartInteractions(cv, l) {
   // Compute layout constants once (must match drawProfileChart)
   const PAD_L = 50, PAD_R = 50, PAD_T = 30, PAD_B = 40;
   const plotW = cv.width  - PAD_L - PAD_R;
@@ -713,15 +853,18 @@ function setupChartInteractions(cv, l) {
 
   // -- Mouse down - hit detection and drag start -----------------------------
   cv.onmousedown = me => {
+    if (!analysisReady(state)) return;
     const rect = cv.getBoundingClientRect();
     const mx   = me.clientX - rect.left;
     const idx  = xToIdx(mx);
+    if (isInsideActiveFit(l, idx)) return;
 
     // Detect if the cursor is on a peak apex or boundary handle
     let hitBound = null;   // {pk, type:'lb'|'rb'}
     let hitApex  = null;   // peak object
 
     for (const pk of (l.peaks || [])) {
+      if (isFittedPeak(pk)) continue;
       const apexX = idxToX(pk.idx);
       ensurePeakBounds(pk, p.length);
       const lb_x  = idxToX(areaLeft(pk));
@@ -739,6 +882,7 @@ function setupChartInteractions(cv, l) {
     if (me.button === 2) {
       if (hitApex) {
         saveState();
+        invalidateKeptFitGroup(l, hitApex, state.fitOverrides);
         l.peaks = l.peaks.filter(pk => pk !== hitApex);
         renderProfiles();
         render();
@@ -759,10 +903,11 @@ function setupChartInteractions(cv, l) {
       const rf = calculateRf(idx, p.length);
       if (rf < 0 || rf > 1) return;  // Outside valid Rf range
 
-      saveState();
       const threshold = parseFloat($('peak-threshold')?.value || 50);
       const peak = { idx, rf, manual: true, type: 'N' };
       setPeakFromApex(peak, p, idx, threshold);
+      if (overlapsActiveFit(l, peak.area_lb, peak.area_rb)) return;
+      saveState();
       l.peaks.push(peak);
       l.peaks.sort((a, b) => a.idx - b.idx);
       renderProfiles();
@@ -771,18 +916,25 @@ function setupChartInteractions(cv, l) {
   };
 
   // -- Double-click - reset peak detection -----------------------------------
-  cv.ondblclick = () => updateDensitograms(true);
+  cv.ondblclick = () => { if (analysisReady(state)) updateDensitograms(true); };
 
   // -- Mouse move - handle drags and cursor feedback -------------------------
   cv.onmousemove = me => {
+    if (!analysisReady(state)) {
+      state.isDraggingPeak = null;
+      state.isDraggingBound = null;
+      cv.style.cursor = 'wait';
+      return;
+    }
     const rect = cv.getBoundingClientRect();
     const mx   = me.clientX - rect.left;
     const idx  = xToIdx(mx);
 
     // -- Dynamic cursor feedback (no active drag) ---------------------------
     if (!state.isDraggingBound && !state.isDraggingPeak) {
-      let cursor = 'crosshair';
+      let cursor = isInsideActiveFit(l, idx) ? 'not-allowed' : 'crosshair';
       for (const pk of (l.peaks || [])) {
+        if (isFittedPeak(pk)) continue;
         ensurePeakBounds(pk, p.length);
         const lb_x  = idxToX(areaLeft(pk));
         const rb_x  = idxToX(areaRight(pk));
@@ -797,14 +949,18 @@ function setupChartInteractions(cv, l) {
     if (state.isDraggingBound) {
       const { pk, type } = state.isDraggingBound;
       ensurePeakBounds(pk, p.length);
-      if (type === 'lb') pk.area_lb = Math.min(areaRight(pk) - 1, Math.max(0, idx));
-      else               pk.area_rb = Math.max(areaLeft(pk) + 1, Math.min(p.length - 1, idx));
+      const proposedLeft = type === 'lb' ? Math.min(areaRight(pk) - 1, Math.max(0, idx)) : areaLeft(pk);
+      const proposedRight = type === 'rb' ? Math.max(areaLeft(pk) + 1, Math.min(p.length - 1, idx)) : areaRight(pk);
+      if (overlapsActiveFit(l, proposedLeft, proposedRight)) return;
+      pk.area_lb = proposedLeft;
+      pk.area_rb = proposedRight;
       pk.lb = pk.area_lb;
       pk.rb = pk.area_rb;
       pk.display_lb = pk.area_lb;
       pk.display_rb = pk.area_rb;
       pk.manual = true;
       pk.area = calculatePeakArea(p, pk.area_lb, pk.area_rb);
+      invalidateKeptFitGroup(l, pk, state.fitOverrides);
 
       // Redraw chart only (not the table) during drag for smooth feedback
       drawProfileChart(cv, l);
@@ -818,7 +974,11 @@ function setupChartInteractions(cv, l) {
     const rf = calculateRf(idx, p.length);
     if (rf < 0 || rf > 1) return;   // Prevent dragging outside valid Rf range
 
-    setPeakFromApex(pk, p, idx, parseFloat($('peak-threshold')?.value || 50));
+    const proposed = { ...pk };
+    setPeakFromApex(proposed, p, idx, parseFloat($('peak-threshold')?.value || 50));
+    if (overlapsActiveFit(l, proposed.area_lb, proposed.area_rb)) return;
+    Object.assign(pk, proposed);
+    invalidateKeptFitGroup(l, pk, state.fitOverrides);
 
     // Redraw chart only during drag; table updates on mouseup (see events.js)
     drawProfileChart(cv, l);
@@ -827,6 +987,11 @@ function setupChartInteractions(cv, l) {
 
   // -- Mouse up - end any active drag ----------------------------------------
   cv.onmouseup = () => {
+    if (!analysisReady(state)) {
+      state.isDraggingPeak = null;
+      state.isDraggingBound = null;
+      return;
+    }
     // After a drag ends, do a full renderProfiles() to update the table with
     // the new area values that accumulated during the drag.
     const wasDragging = state.isDraggingPeak || state.isDraggingBound;

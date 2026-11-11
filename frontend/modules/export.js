@@ -6,8 +6,9 @@
  */
 
 import { state } from './state.js';
-import { generatePeakRowHTML } from './profiles.js';
+import { buildFitGroupsHTML, generatePeakRowHTML } from './profiles.js';
 import { calculateCalibrationCurve, calculateMWCalibrationCurve } from './analysis.js';
+import { analysisReady, fitCurveSeries, fitGroups, fitIntegrationSegments, isFittedPeak } from './shoulder.js';
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -27,12 +28,45 @@ function safeFileName(value, fallback = 'AQ-TLC_Report') {
   return cleaned || fallback;
 }
 
+/** The report curve and fitted overlays must use the same analytical scale. */
+export function getReportProfile(lane) {
+  return Array.isArray(lane.profile_analysis) && lane.profile_analysis.length
+    ? lane.profile_analysis
+    : [...(lane.profile || [])].reverse();
+}
+
+let _lastDownloadUrl = null;
+
+function offerReportDownload(reportHtml, fileName, autoClick = false) {
+  if (_lastDownloadUrl) URL.revokeObjectURL(_lastDownloadUrl);
+  _lastDownloadUrl = URL.createObjectURL(new Blob([reportHtml], { type: 'text/html' }));
+  let link = document.getElementById('report-download-link');
+  if (!link) {
+    link = document.createElement('a');
+    link.id = 'report-download-link';
+    link.className = 'report-download-link';
+    const host = document.getElementById('densitogram-list') || document.body;
+    if (typeof host.prepend === 'function') host.prepend(link);
+    else host.appendChild(link);
+  }
+  link.href = _lastDownloadUrl;
+  link.download = fileName;
+  link.textContent = 'Download report HTML';
+  link.title = fileName;
+  // Keep the link available even if a browser hides the popup WindowProxy.
+  if (autoClick) link.click();
+}
+
 /**
  * Generates an analytical report for the active lane or all lanes.
  *
  * @param {string|null} type - 'all' for full report of all lanes, or null for active lane only.
  */
 export async function exportReport(type = null) {
+  if (!analysisReady(state)) {
+    alert('Analysis is still updating or needs a successful retry before export.');
+    return;
+  }
   let lanesToExport = [];
   let isFullReport = false;
 
@@ -52,9 +86,42 @@ export async function exportReport(type = null) {
     return;
   }
 
-  const img = new Image();
-  img.src = state.imgB64;
-  await new Promise(r => (img.onload = r));
+  // Claim the popup while the export click still has user activation. Waiting
+  // for an image before window.open can make browsers silently block it.
+  let win = null;
+  try { win = window.open('', '_blank'); } catch (error) {
+    console.warn('Report popup was blocked; preparing a download link.', error);
+  }
+  if (win) {
+    try {
+      win.document.write('<!doctype html><title>Preparing AQ-TLC report</title><p>Preparing report…</p>');
+      win.document.close();
+    } catch (error) {
+      console.warn('Report popup could not be written; preparing a download link.', error);
+      win = null;
+    }
+  }
+
+  let img = state.imgEl;
+  if (!img?.complete || img.naturalWidth <= 0) {
+    img = new Image();
+    try {
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = () => reject(new Error('The plate image could not be loaded for the report.'));
+        img.src = state.imgB64;
+        if (img.complete && img.naturalWidth > 0) resolve();
+      });
+    } catch (error) {
+      if (win) {
+        win.document.open();
+        win.document.write('<p>The plate image could not be loaded. Please try Export again.</p>');
+        win.document.close();
+      }
+      alert(error.message);
+      return;
+    }
+  }
 
   let reportHtml = `<html><head><title>AQ-TLC Analytical Report</title><style>
         body { font-family: 'Segoe UI', Arial, sans-serif; padding: 40px; color: #1a1a1a; max-width: 1000px; margin: auto; }
@@ -68,6 +135,16 @@ export async function exportReport(type = null) {
         th, td { border-bottom: 1px solid #eee; padding: 12px 15px; text-align: left; }
         th { background: #f8f9fa; font-weight: 700; color: #555; text-transform: uppercase; font-size: 0.75rem; }
         .badge { background: #ffc107; padding: 2px 10px; border-radius: 12px; font-size: 0.8rem; font-weight: 700; color:#000; }
+        .fit-groups { margin: 18px 0; }
+        .fit-card { border: 1px solid #bbb; border-radius: 6px; padding: 10px; margin: 8px 0; break-inside: avoid; }
+        .fit-card-head { display: flex; justify-content: space-between; gap: 10px; font-size: 0.82rem; }
+        .fit-diagnostics, .fit-reason, .fit-provenance { font-size: 0.75rem; color: #555; line-height: 1.5; }
+        .fit-legend { display: flex; gap: 12px; font-size: 0.72rem; color: #555; }
+        .fit-legend span::before { content: ''; display: inline-block; width: 17px; margin-right: 5px; vertical-align: middle; border-top: 2px solid; }
+        .fit-legend .measured::before { border-color: #0366d6; }
+        .fit-legend .total::before { border-color: #008f82; }
+        .fit-legend .component::before { border-color: #8055b7; border-top-style: dashed; }
+        .fit-area-label { display: block; color: #68409b; font-size: 0.7rem; }
         @media print { .page-break:last-child { page-break-after: auto; margin-bottom: 0px; } }
     </style></head><body>`;
 
@@ -83,12 +160,12 @@ export async function exportReport(type = null) {
     sctx.save();
     sctx.translate(boxHeight / 2, l.w / 2);
     sctx.rotate(Math.PI / 2 - l.angle);
-    sctx.drawImage(img, -l.cx, -l.cy);
+    sctx.drawImage(img, -l.cx, -l.cy, state.imgW, state.imgH);
     sctx.restore();
 
     const n = (l.profile || []).length;
     if (n > 1) {
-      (l.peaks || []).forEach(pk => {
+      (l.peaks || []).filter(pk => !isFittedPeak(pk)).forEach(pk => {
         const lb = pk.area_lb !== undefined ? pk.area_lb : (pk.lb !== undefined ? pk.lb : Math.max(0, pk.idx - 5));
         const rb = pk.area_rb !== undefined ? pk.area_rb : (pk.rb !== undefined ? pk.rb : Math.min(n - 1, pk.idx + 5));
         const x_pos_rb_flipped = (lb / (n - 1)) * boxHeight;
@@ -117,6 +194,14 @@ export async function exportReport(type = null) {
         sctx.lineTo(x_pos_lb_flipped, l.w);
         sctx.stroke();
       });
+      fitGroups(l).filter(group => group.active === true).forEach(group => {
+        fitIntegrationSegments(group).forEach(segment => {
+          const x0 = (segment.lb / (n - 1)) * boxHeight;
+          const x1 = (segment.rb / (n - 1)) * boxHeight;
+          sctx.fillStyle = 'rgba(128,85,183,0.24)';
+          sctx.fillRect(x0, 0, x1 - x0, l.w);
+        });
+      });
     }
 
     const hiResChart = document.createElement('canvas');
@@ -126,24 +211,57 @@ export async function exportReport(type = null) {
     hctx.fillStyle = '#ffffff';
     hctx.fillRect(0, 0, 1600, 800);
 
-    const p_orig = l.profile || [];
-    const p = [...p_orig].reverse();
+    const fitSeries = fitGroups(l)
+      .filter(group => group.status === 'resolved')
+      .map(group => ({ group, series: fitCurveSeries(group, l.profile_analysis?.length || 0) }))
+      .filter(item => item.series);
+    const p = getReportProfile(l);
     const padL = 80;
     const padR = 120;
     const pw = 1600 - padL - padR;
-    const maxVal = Math.max(...p, 1);
+    let minVal = 0;
+    let maxVal = 1;
+    const includeRange = value => { minVal = Math.min(minVal, value); maxVal = Math.max(maxVal, value); };
+    p.forEach(includeRange);
+    fitSeries.forEach(({ series }) => {
+      series.total.forEach(includeRange);
+      series.components.forEach(component => component.curve.forEach(includeRange));
+    });
+    const range = maxVal - minVal || 1;
+    const yFor = value => 700 - ((value - minVal) / range) * 600;
     if (p.length > 0) {
       hctx.strokeStyle = '#0366d6';
       hctx.lineWidth = 3;
       hctx.beginPath();
       p.forEach((v, i) => {
         const x = padL + (i / (p.length - 1)) * pw;
-        const y = 700 - (v / maxVal) * 600;
+        const y = yFor(v);
         if (i === 0) hctx.moveTo(x, y);
         else hctx.lineTo(x, y);
       });
       hctx.stroke();
     }
+
+    const plotFit = (curve, firstIndex, color, dashed, width) => {
+      hctx.beginPath();
+      hctx.strokeStyle = color;
+      hctx.lineWidth = width;
+      hctx.setLineDash(dashed ? [11, 7] : []);
+      curve.forEach((value, offset) => {
+        const x = padL + ((firstIndex + offset) / (p.length - 1)) * pw;
+        const y = yFor(value);
+        if (offset === 0) hctx.moveTo(x, y);
+        else hctx.lineTo(x, y);
+      });
+      hctx.stroke();
+      hctx.setLineDash([]);
+    };
+    fitSeries.forEach(({ group, series }) => {
+      plotFit(series.total, series.lb, '#008f82', group.active !== true, 3);
+      series.components.forEach((component, index) => {
+        plotFit(component.curve, series.lb, index % 2 ? '#b8741d' : '#8055b7', true, 2);
+      });
+    });
 
     hctx.fillStyle = '#000';
     hctx.font = 'bold 24px Inter';
@@ -201,8 +319,10 @@ export async function exportReport(type = null) {
                 <div class="lane-strip-area"><img src="${laneStripUrl}" class="lane-strip-img"></div>
                 <img src="${chartImgUrl}" class="chart-img">
             </div>
+            ${buildFitGroupsHTML(l, true)}
             <h3 style="margin-top:40px; border-bottom:2px solid #eee; padding-bottom:10px; font-size:0.9rem">QUANTITATIVE INTEGRATION (${state.integrationMethod.toUpperCase()})</h3>
             <table><thead>${tableHeaders}</thead><tbody>${rows}</tbody></table>
+            ${peaks.some(isFittedPeak) ? '<p class="fit-provenance">Fitted component areas are model-allocated estimates from the summed measured Width%-controlled component windows. The model integral shown beneath each area is a diagnostic, not the quantity used for percentages or calibration.</p>' : ''}
         </div>`;
   }
 
@@ -212,20 +332,16 @@ export async function exportReport(type = null) {
     ? 'AQ-TLC_Full_Report.html'
     : `AQ-TLC_Report_${safeFileName(lanesToExport[0].name || lanesToExport[0].id)}.html`;
 
-  try {
-    const win = window.open('', '_blank');
-    win.document.write(reportHtml);
-    win.document.close();
-  } catch (e) {
-    console.warn('Popup document.write blocked by iframe sandbox. Falling back to explicit file download.', e);
-    const blob = new Blob([reportHtml], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  let popupSucceeded = false;
+  if (win) {
+    try {
+      win.document.open();
+      win.document.write(reportHtml);
+      win.document.close();
+      popupSucceeded = true;
+    } catch (error) {
+      console.warn('Report popup could not be filled; preparing a download link.', error);
+    }
   }
+  offerReportDownload(reportHtml, fileName, !popupSucceeded);
 }

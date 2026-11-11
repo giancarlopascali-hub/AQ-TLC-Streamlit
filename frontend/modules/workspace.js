@@ -21,6 +21,7 @@ import { renderProfiles   } from './profiles.js';
 import { stSend, stOnRender, stSetHeight } from './streamlit_bridge.js';
 import { cancelPendingProfileRequests, updateDensitograms } from './api.js';
 import { syncLaneWidthControl } from './lane_width.js';
+import { syncShoulderControl } from './shoulder.js';
 
 // -- Crop response counter -----------------------------------------------------
 let _cropReqCounter = 0;
@@ -65,6 +66,13 @@ export function saveState() {
     lines:   JSON.parse(JSON.stringify(state.lines)),
     lanes:   JSON.parse(JSON.stringify(state.lanes)),
     laneWidth: state.laneWidth,
+    shoulderSensitivity: state.shoulderSensitivity,
+    fitOverrides: { ...state.fitOverrides },
+    peakParameters: {
+      prominence: $('peak-prominence')?.value,
+      distance: $('peak-distance')?.value,
+      threshold: $('peak-threshold')?.value,
+    },
     marks:   JSON.parse(JSON.stringify(state.spottingMarks)),
     rot:     state.imageRotation,
     img:     state.imgB64,
@@ -91,6 +99,8 @@ export function undo() {
   state.lines          = snapshot.lines;
   state.lanes          = snapshot.lanes;
   state.laneWidth      = snapshot.laneWidth ?? (snapshot.lanes[0]?.w ?? null);
+  state.shoulderSensitivity = snapshot.shoulderSensitivity ?? 0;
+  state.fitOverrides = { ...(snapshot.fitOverrides || {}) };
   state.activeLane     = state.lanes.find(lane => lane.id === activeLaneId) || state.lanes[0] || null;
   state.spottingMarks  = snapshot.marks;
   state.imageRotation  = snapshot.rot;
@@ -105,6 +115,15 @@ export function undo() {
   }
 
   syncLaneWidthControl(state);
+  syncShoulderControl(state);
+  for (const [key, id] of [['prominence', 'peak-prominence'], ['distance', 'peak-distance'], ['threshold', 'peak-threshold']]) {
+    const value = snapshot.peakParameters?.[key];
+    if (value === undefined) continue;
+    const slider = $(id);
+    const label = $(`${id}-val`);
+    if (slider) slider.value = value;
+    if (label) label.textContent = value;
+  }
   renderProfiles();
   render();
   if (state.lanes.some(lane => !lane.profile_analysis?.length)) updateDensitograms(true);
@@ -147,6 +166,7 @@ export function handleFile(file) {
       state.lines          = [];
       state.lanes          = [];
       state.laneWidth      = null;
+      state.fitOverrides   = {};
       state.spottingMarks  = [];
       state.activeLine     = null;
       state.activeLane     = null;
@@ -179,6 +199,8 @@ export function resetState(keepImage = true) {
   state.lines          = [];
   state.lanes          = [];
   state.laneWidth      = null;
+  state.shoulderSensitivity = 0;
+  state.fitOverrides   = {};
   state.spottingMarks  = [];
   state.roiRect        = null;
   state.activeLine     = null;
@@ -191,6 +213,7 @@ export function resetState(keepImage = true) {
   state.wavelengthBandwidth = 0;
   state.invertColors = false;
   syncLaneWidthControl(state);
+  syncShoulderControl(state);
 
   const btnInvert = document.getElementById('btn-invert-colors');
   if (btnInvert) btnInvert.classList.remove('active');

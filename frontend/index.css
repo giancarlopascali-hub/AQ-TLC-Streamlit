@@ -205,6 +205,32 @@ canvas { display: block; }
   background: rgba(88, 166, 255, 0.05);
 }
 
+.fit-groups { margin: 9px 0 4px; }
+.fit-empty, .fit-provenance, .fit-table-note {
+  color: var(--text-dim);
+  font-size: 0.68rem;
+  line-height: 1.45;
+  margin: 7px 2px;
+}
+.fit-legend { display: flex; flex-wrap: wrap; gap: 11px; margin: 5px 2px 8px; font-size: 0.68rem; color: var(--text-dim); }
+.fit-legend span::before { content: ''; display: inline-block; width: 17px; margin-right: 5px; vertical-align: middle; border-top: 2px solid; }
+.fit-legend .measured::before { border-color: #58a6ff; }
+.fit-legend .total::before { border-color: #70e1d0; }
+.fit-legend .component::before { border-color: #c297ff; border-top-style: dashed; }
+.fit-card { border: 1px solid var(--border); border-radius: 7px; background: rgba(88,166,255,0.04); padding: 8px; margin: 6px 0; }
+.fit-card-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; font-size: 0.72rem; }
+.fit-card-head span { color: var(--text-dim); font-size: 0.65rem; text-align: right; }
+.fit-choice { display: flex; gap: 4px; margin: 8px 0 5px; }
+.fit-choice button { border: 1px solid var(--border); border-radius: 4px; background: var(--secondary); color: var(--text); padding: 4px 8px; cursor: pointer; font-size: 0.69rem; }
+.fit-choice button.active { background: var(--accent); border-color: var(--accent); color: white; }
+.fit-choice button:hover { border-color: #58a6ff; }
+.fit-choice button:disabled { opacity: 0.55; cursor: wait; }
+.analysis-pending { margin: 0 0 9px; padding: 6px 8px; border: 1px solid #8b6d18; border-radius: 5px; color: #e3b341; font-size: 0.68rem; }
+.report-download-link { display: block; margin: 10px 0; padding: 8px; border: 1px solid var(--accent); border-radius: 6px; color: #9cc8ff; font-size: 0.75rem; text-align: center; }
+.fit-diagnostics { color: var(--text-dim); font-size: 0.64rem; line-height: 1.45; }
+.fit-reason, .fit-unresolved { color: #e3b341; font-size: 0.65rem; line-height: 1.4; }
+.fit-area-label { display: block; color: #b58cff; font-size: 0.59rem; white-space: nowrap; }
+
 /* 3-level switch for Type */
 .type-switch {
   display: flex;

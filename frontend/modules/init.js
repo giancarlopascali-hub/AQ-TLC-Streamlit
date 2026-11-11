@@ -25,6 +25,8 @@ import {
 } from './constants.js';
 import { stReady, stSetHeight } from './streamlit_bridge.js';
 import { wavelengthWindowToRgb } from './image_filters.js';
+import { DEFAULT_SHOULDER_SENSITIVITY, normalizeShoulderSensitivity,
+         shoulderSensitivityLabel } from './shoulder.js';
 
 /**
  * Initializes DOM event listeners, configures tool selection, attaches window
@@ -266,6 +268,23 @@ export function init() {
     $('peak-threshold-val').textContent = e.target.value;
     if (state.activeLane) updateDensitograms(true);
   };
+  const shoulderSlider = $('shoulder-sensitivity');
+  if (shoulderSlider) {
+    shoulderSlider.value = normalizeShoulderSensitivity(state.shoulderSensitivity);
+    $('shoulder-sensitivity-val').textContent = shoulderSensitivityLabel(shoulderSlider.value);
+    shoulderSlider.oninput = e => {
+      $('shoulder-sensitivity-val').textContent = shoulderSensitivityLabel(e.target.value);
+    };
+    shoulderSlider.onchange = e => {
+      const next = normalizeShoulderSensitivity(e.target.value);
+      if (next === state.shoulderSensitivity) return;
+      saveState();
+      state.shoulderSensitivity = next;
+      if (state.lanes.length) {
+        updateDensitograms(true);
+      }
+    };
+  }
 
   // -- Tool Selection Grid -----------------------------------------------------
   document.querySelectorAll('.tool-btn').forEach(btn => {
@@ -280,12 +299,17 @@ export function init() {
   document.querySelector('[data-tool="pan"]')?.classList.add('active');
 
   $('btn-restore-defaults').onclick = () => {
+    saveState();
     $('peak-prominence').value = DEFAULT_PEAK_PROMINENCE;
     $('peak-prominence-val').textContent = DEFAULT_PEAK_PROMINENCE;
     $('peak-distance').value = DEFAULT_PEAK_DISTANCE;
     $('peak-distance-val').textContent = DEFAULT_PEAK_DISTANCE;
     $('peak-threshold').value = DEFAULT_PEAK_THRESHOLD;
     $('peak-threshold-val').textContent = DEFAULT_PEAK_THRESHOLD;
+    state.shoulderSensitivity = DEFAULT_SHOULDER_SENSITIVITY;
+    state.fitOverrides = {};
+    if (shoulderSlider) shoulderSlider.value = DEFAULT_SHOULDER_SENSITIVITY;
+    $('shoulder-sensitivity-val').textContent = shoulderSensitivityLabel(DEFAULT_SHOULDER_SENSITIVITY);
     if (state.activeLane) updateDensitograms(true);
   };
 

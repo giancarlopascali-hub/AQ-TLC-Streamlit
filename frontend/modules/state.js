@@ -131,6 +131,18 @@ export const state = {
    */
   integrationMethod: 'relative',
 
+  /** 0 disables shoulder fitting; 1..100 requests progressively more sensitive candidates. */
+  shoulderSensitivity: 0,
+
+  /** User choices for stable backend fit-group IDs. */
+  fitOverrides: {},
+
+  /** True while a newly requested profile/fit is awaiting its response. */
+  isProfilePending: false,
+
+  /** True until a changed analysis setting has a successful matching response. */
+  isProfileStale: false,
+
   // -- Undo ---------------------------------------------------------------
   /**
    * Stack of serialised state snapshots for undo (Ctrl+Z).

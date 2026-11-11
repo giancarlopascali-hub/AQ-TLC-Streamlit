@@ -237,6 +237,16 @@
               </div>
               <input type="range" id="peak-threshold" min="5" max="95" value="50" style="height:12px">
             </div>
+            <div class="slider-row" style="margin-top:7px">
+              <div class="slider-header" style="font-size:0.7rem">
+                <label for="shoulder-sensitivity">Shoulder sensitivity</label><span id="shoulder-sensitivity-val">Off</span>
+              </div>
+              <input type="range" id="shoulder-sensitivity" min="0" max="100" step="1" value="0"
+                     aria-describedby="shoulder-sensitivity-help" style="height:12px">
+              <div id="shoulder-sensitivity-help" style="font-size:0.62rem;color:var(--text-dim);line-height:1.35;margin-top:3px">
+                Off keeps ordinary peak detection. Higher values look for overlapping shoulders; review each suggested split.
+              </div>
+            </div>
             <button class="action-btn secondary small" id="btn-restore-defaults"
                     style="margin-top:8px;font-size:0.65rem;padding:3px;width:100%">&#8634; Restore Defaults</button>
           </div>
