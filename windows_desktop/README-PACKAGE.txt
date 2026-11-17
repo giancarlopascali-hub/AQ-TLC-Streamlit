@@ -1,4 +1,4 @@
-AQ-TLC Desktop v1.1 for Windows (64-bit)
+AQ-TLC Desktop v1.2 for Windows (64-bit)
 
 1. Extract the whole ZIP before running the app.
 2. Keep AQ-TLC-Desktop.exe and the _internal folder together.
@@ -11,4 +11,7 @@ before closing the app. If the browser does not open, use the local address
 printed in the console window.
 
 This Windows package includes the AQ-TLC Desktop analysis backend and interface.
+Shoulder sensitivity can propose overlapping peaks for review. Split and Keep
+single choices, measured and fitted curves, and model-allocated areas appear in
+the analysis and report views.
 Third-party licenses are in _internal/licenses.

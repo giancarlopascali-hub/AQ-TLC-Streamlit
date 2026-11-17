@@ -23,6 +23,15 @@ def stage(destination: Path) -> None:
     html = re.sub(r"^\s*<link[^>]*fonts\.(?:googleapis|gstatic)\.com[^>]*>\s*\n", "", html, flags=re.MULTILINE)
     index.write_text(html, encoding="utf-8")
 
+    # The portable release has its own version label while scientific and UI
+    # source remains shared with the online Desktop app.
+    for relative in ("index.html", "guide.html", "modules/export.js"):
+        target = destination / relative
+        text = target.read_text(encoding="utf-8")
+        if "v1.1" not in text:
+            raise ValueError(f"Expected source version label missing: {relative}")
+        target.write_text(text.replace("v1.1", "v1.2"), encoding="utf-8")
+
 
 if __name__ == "__main__":
     stage(Path(sys.argv[1]).resolve())
