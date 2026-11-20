@@ -111,62 +111,86 @@ export function findPeakBounds(profile, apex, thresholdPercent = 50) {
 //  AREA CALIBRATION CURVE
 //                                                                             
 
-/**
- * Builds a calibration function that converts integrated peak area (AU) to
- * a user-defined quantity (e.g. concentration, mass).
- *
- * The curve is constructed from all peaks flagged as Type S (Standard) across
- * ALL lanes in the current image, providing a global calibration model.
- *
- * Algorithm selection:
- *   0 standards -> returns null (no calibration possible).
- *   1 standard  -> linear-through-origin: y = (S.value / S.area)   area.
- *   2+ standards -> ordinary least squares regression: y = m area + b.
- *                  Guards against the degenerate case where all standards have
- *                  the same area (returns a constant function).
- *
- * @returns {((area: number) => number) | null}
- *   A function mapping area to calibrated quantity, or null if no standards are defined.
- */
-export function calculateCalibrationCurve() {
-  // Collect all Type-S peaks that have a valid calibrationValue
-  const standards = [];
-  state.lanes.forEach(l => {
-    (l.peaks || []).forEach(pk => {
-      if (pk.type === 'S' && pk.calibrationValue !== undefined && !isNaN(pk.calibrationValue)) {
-        standards.push({ area: pk.area, value: pk.calibrationValue });
+/** Group replicate standards by entered amount and average their existing areas. */
+export function buildAreaCalibrationModel(lanes = state.lanes) {
+  const groups = new Map();
+  let skippedCount = 0;
+  for (const lane of lanes || []) {
+    for (const peak of lane.peaks || []) {
+      if (peak.type !== 'S') continue;
+      const entered = peak.calibrationValue;
+      const value = entered === undefined || entered === null || String(entered).trim() === ''
+        ? NaN : Number(entered);
+      const area = Number(peak.area);
+      if (!Number.isFinite(value) || value < 0 || !Number.isFinite(area) || area <= 0) {
+        skippedCount++;
+        continue;
       }
-    });
-  });
-
-  if (standards.length === 0) return null;
-
-  // Single standard: force the regression line through the origin
-  if (standards.length === 1) {
-    if (!Number.isFinite(standards[0].area) || standards[0].area <= 0) return null;
-    const m = standards[0].value / standards[0].area;
-    return area => area * m;
+      const group = groups.get(value) || { value, areaSum: 0, replicates: 0 };
+      group.areaSum += area;
+      group.replicates++;
+      groups.set(value, group);
+    }
   }
 
-  // Multiple standards: ordinary least squares (y = mx + b)
-  const n = standards.length;
-  let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
-  standards.forEach(s => {
-    sumX  += s.area;
-    sumY  += s.value;
-    sumXY += s.area  * s.value;
-    sumXX += s.area  * s.area;
-  });
+  const levels = [...groups.values()]
+    .map(group => ({ value: group.value, area: group.areaSum / group.replicates, replicates: group.replicates }))
+    .sort((left, right) => left.value - right.value);
+  const fail = error => ({ evaluate: null, error, levels, skippedCount });
+  if (!levels.length) return fail('Add an S standard with a known amount and a positive measured area.');
+  if (levels.some(level => !Number.isFinite(level.area))) return fail('Standard mean areas must be finite.');
+  if (levels.some((level, index) => index > 0 &&
+      level.area - levels[index - 1].area <= 1e-9 * Math.max(1, level.area, levels[index - 1].area))) {
+    return fail('Mean standard areas must increase with known amount. Check the standards and integration windows.');
+  }
+  if (levels.length === 1 && levels[0].value === 0) {
+    return fail('A single zero-amount standard cannot define a proportional calibration.');
+  }
 
-  const denominator = n * sumXX - sumX * sumX;
-  const m = denominator !== 0 ? (n * sumXY - sumX * sumY) / denominator : NaN;
-  const b = (sumY - m * sumX) / n;
+  const straightLine = (left, right, area) =>
+    left.value + (area - left.area) * (right.value - left.value) / (right.area - left.area);
+  const evaluate = inputArea => {
+    const area = Number(inputArea);
+    if (!Number.isFinite(area) || area < 0) return null;
+    // Exact standards retain their entered values even at a bracket boundary.
+    const exact = levels.find(level => Math.abs(area - level.area) <= 1e-12 * Math.max(1, area));
+    if (exact) return exact.value;
+    if (levels.length === 1) return area * levels[0].value / levels[0].area;
+    if (area < levels[0].area) return Math.max(0, straightLine(levels[0], levels[1], area));
+    const last = levels.length - 1;
+    if (area > levels[last].area) return Math.max(0, straightLine(levels[last - 1], levels[last], area));
 
-  // Degenerate case: all standards have identical area -> constant output
-  if (!Number.isFinite(m) || !Number.isFinite(b)) return null;
+    const bracket = levels.findIndex((level, index) => index < last && area > level.area && area < levels[index + 1].area);
+    if (bracket < 0) return null;
+    const left = levels[bracket], right = levels[bracket + 1];
+    const linear = straightLine(left, right, area);
+    if (levels.length === 2) return Math.max(0, linear);
 
-  // Clamp output at 0 to prevent negative calibrated values from extrapolation
-  return area => Math.max(0, m * area + b);
+    // Choose one fixed neighbouring triplet per bracket, so the prediction
+    // cannot jump because the third point changes inside that bracket.
+    const third = bracket === 0 ? levels[2] : bracket + 2 > last ? levels[bracket - 1]
+      : left.area - levels[bracket - 1].area <= levels[bracket + 2].area - right.area
+        ? levels[bracket - 1] : levels[bracket + 2];
+    const trio = [left, right, third].sort((a, b) => a.area - b.area);
+    const [first, middle, final] = trio;
+    const slope01 = (middle.value - first.value) / (middle.area - first.area);
+    const slope12 = (final.value - middle.value) / (final.area - middle.area);
+    const curvature = (slope12 - slope01) / (final.area - first.area);
+    const derivative = x => slope01 + curvature * (2 * x - first.area - middle.area);
+    const quadratic = first.value + slope01 * (area - first.area)
+      + curvature * (area - first.area) * (area - middle.area);
+    // A local quadratic may bend backwards despite increasing standards.
+    // Reject that shape for the whole bracket, not only one query position.
+    const monotone = derivative(left.area) > 0 && derivative(right.area) > 0;
+    const inBracket = quadratic >= left.value - 1e-9 && quadratic <= right.value + 1e-9;
+    return Math.max(0, monotone && inBracket && Number.isFinite(quadratic) ? quadratic : linear);
+  };
+  return { evaluate, error: null, levels, skippedCount };
+}
+
+/** Compatibility wrapper for callers that only need the area-to-amount function. */
+export function calculateCalibrationCurve() {
+  return buildAreaCalibrationModel().evaluate;
 }
 
 //                                                                             

@@ -6,8 +6,8 @@
  */
 
 import { state } from './state.js';
-import { buildFitGroupsHTML, generatePeakRowHTML } from './profiles.js';
-import { calculateCalibrationCurve, calculateMWCalibrationCurve } from './analysis.js';
+import { buildCalibrationNoteHTML, buildFitGroupsHTML, generatePeakRowHTML } from './profiles.js';
+import { buildAreaCalibrationModel, calculateMWCalibrationCurve } from './analysis.js';
 import { analysisReady, fitCurveSeries, fitGroups, fitIntegrationSegments, isFittedPeak } from './shoulder.js';
 
 function escapeHtml(value) {
@@ -102,6 +102,7 @@ export async function exportReport(type = null) {
     }
   }
 
+  const imageSource = state.imgB64;
   let img = state.imgEl;
   if (!img?.complete || img.naturalWidth <= 0) {
     img = new Image();
@@ -121,6 +122,20 @@ export async function exportReport(type = null) {
       alert(error.message);
       return;
     }
+  }
+
+  // The image decode above may yield to a new analysis or a different image.
+  // Build the report only from the plate and lane selection it was opened for.
+  if (!analysisReady(state) || state.imgB64 !== imageSource
+      || (type !== 'all' && state.activeLane !== lanesToExport[0])
+      || lanesToExport.some(lane => !state.lanes.includes(lane))) {
+    if (win) {
+      win.document.open();
+      win.document.write('<p>The analysis changed while preparing the report. Please export again.</p>');
+      win.document.close();
+    }
+    alert('The analysis changed while preparing the report. Please export again.');
+    return;
   }
 
   let reportHtml = `<html><head><title>AQ-TLC Analytical Report</title><style>
@@ -286,14 +301,14 @@ export async function exportReport(type = null) {
     const totalArea = peaks.reduce((s, pk) => s + pk.area, 0);
     const totalCorr = peaks.reduce((s, pk) => s + pk.area / (pk.absRatio || 1), 0);
     const mwCurve = state.integrationMethod === 'mw_calibration' ? calculateMWCalibrationCurve() : null;
-    const calCurve = state.integrationMethod === 'calibration' ? calculateCalibrationCurve() : null;
+    const calModel = state.integrationMethod === 'calibration' ? buildAreaCalibrationModel() : null;
 
     const rows = peaks
       .map((pk, i) =>
         generatePeakRowHTML(pk, i, state.integrationMethod, {
           totalArea,
           totalCorr,
-          calCurve,
+          calModel,
           mwCurve,
           isExport: true,
         })
@@ -321,6 +336,7 @@ export async function exportReport(type = null) {
             </div>
             ${buildFitGroupsHTML(l, true)}
             <h3 style="margin-top:40px; border-bottom:2px solid #eee; padding-bottom:10px; font-size:0.9rem">QUANTITATIVE INTEGRATION (${state.integrationMethod.toUpperCase()})</h3>
+            ${buildCalibrationNoteHTML(calModel)}
             <table><thead>${tableHeaders}</thead><tbody>${rows}</tbody></table>
             ${peaks.some(isFittedPeak) ? '<p class="fit-provenance">Fitted component areas are model-allocated estimates from the summed measured Width%-controlled component windows. The model integral shown beneath each area is a diagnostic, not the quantity used for percentages or calibration.</p>' : ''}
         </div>`;

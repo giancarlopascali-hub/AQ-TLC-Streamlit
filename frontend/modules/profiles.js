@@ -28,7 +28,7 @@
 
 import { state, $                                          } from './state.js';
 import { calculateRf, calculatePeakArea, findPeakBounds,
-         calculateCalibrationCurve, calculateMWCalibrationCurve } from './analysis.js';
+         buildAreaCalibrationModel, calculateMWCalibrationCurve } from './analysis.js';
 import { cancelPendingProfileRequests, updateDensitograms  } from './api.js';
 import { render                                            } from './render.js';
 import { saveState                                         } from './workspace.js';
@@ -276,7 +276,7 @@ function buildPeakTable(l) {
   const peaks        = l.peaks || [];
   const totalArea    = peaks.reduce((s, pk) => s + pk.area, 0);
   const totalCorr    = peaks.reduce((s, pk) => s + (pk.area / (pk.absRatio || 1)), 0);
-  const calCurve     = method === 'calibration'    ? calculateCalibrationCurve()   : null;
+  const calModel     = method === 'calibration'    ? buildAreaCalibrationModel()   : null;
   const mwCurve      = method === 'mw_calibration' ? calculateMWCalibrationCurve() : null;
 
   // Build column headers based on integration mode
@@ -287,16 +287,40 @@ function buildPeakTable(l) {
     : `<th style="text-align:left">Peak</th><th style="text-align:center">Rf</th><th style="text-align:right">Area (AU)</th><th style="text-align:right">%</th><th style="text-align:center">Abs Ratio</th><th style="text-align:right">% Corr.</th>`;
 
   const rows = peaks.map((pk, i) =>
-    generatePeakRowHTML(pk, i, method, { totalArea, totalCorr, calCurve, mwCurve })
+    generatePeakRowHTML(pk, i, method, { totalArea, totalCorr, calModel, mwCurve })
   ).join('');
 
   return `
+    ${buildCalibrationNoteHTML(calModel)}
     <table class="integration-table" style="width:100%">
       <thead><tr style="border-bottom:2px solid var(--border)">${headers}</tr></thead>
       <tbody id="peak-table-body">${rows}</tbody>
     </table>
     ${peaks.some(isFittedPeak) ? '<p class="fit-table-note">Model-allocated areas partition the summed measured Width%-controlled component windows. Each row also shows its model integral over those windows.</p>' : ''}
   `;
+}
+
+/** Explain the standards used and make an unavailable calibration visible. */
+export function buildCalibrationNoteHTML(model) {
+  if (!model) return '';
+  const spots = model.levels.reduce((count, level) => count + level.replicates, 0);
+  let description;
+  if (model.error) {
+    description = `Calibration unavailable: ${model.error}`;
+  } else {
+    const pooling = `${model.levels.length} known amount level${model.levels.length === 1 ? '' : 's'} from ${spots} standard spot${spots === 1 ? '' : 's'}; replicate areas at the same amount are averaged.`;
+    const method = model.levels.length === 1
+      ? 'One-level estimate assumes response is proportional to amount through zero.'
+      : model.levels.length === 2
+        ? 'Two-level straight line; values outside the standard area range are linearly extrapolated.'
+        : 'Local three-level quadratic interpolation with a straight-line safeguard; values outside the standard area range are linearly extrapolated.';
+    description = `Area calibration: ${pooling} ${method}`;
+  }
+  if (model.skippedCount) description += ` ${model.skippedCount} incomplete or invalid S spot${model.skippedCount === 1 ? ' was' : 's were'} excluded.`;
+  const style = model.error
+    ? 'color:#b42318; background:#fff1f0; border:1px solid #efb5b0;'
+    : 'color:#386b53; background:#edf8f0; border:1px solid #b9ddc1;';
+  return `<p class="calibration-note" role="status" style="${style} padding:8px; border-radius:5px; font-size:0.76rem; line-height:1.4">${escapeHtml(description)}</p>`;
 }
 
 //                                                                             
@@ -319,13 +343,13 @@ function buildPeakTable(l) {
  * @param {Object}  [opts={}]     - Optional calculated values to avoid re-computing per row.
  * @param {number}  [opts.totalArea]  - Sum of all peak areas in the lane.
  * @param {number}  [opts.totalCorr]  - Sum of all corrected areas in the lane.
- * @param {Function}[opts.calCurve]   - Area calibration function (or null).
+ * @param {Object}  [opts.calModel]   - Area calibration model (or null).
  * @param {Function}[opts.mwCurve]    - MW calibration function (or null).
  * @param {boolean} [opts.isExport]   - When true, omit interactive data-action attributes.
  * @returns {string} <tr> HTML string.
  */
 export function generatePeakRowHTML(pk, i, method, opts = {}) {
-  const { totalArea = 0, totalCorr = 0, calCurve = null, mwCurve = null, isExport = false } = opts;
+  const { totalArea = 0, totalCorr = 0, calModel = null, mwCurve = null, isExport = false } = opts;
   const type      = pk.type || 'N';
   const corrArea  = pk.area / (pk.absRatio || 1);
   const rfDisplay = `${pk.rf.toFixed(3)}${pk.manual ? '<span style="color:#e34c26; margin-left:2px">*</span>' : ''}`;
@@ -400,10 +424,13 @@ export function generatePeakRowHTML(pk, i, method, opts = {}) {
   if (method === 'calibration') {
     let valCell;
     if (type === 'S') {
+      const entered = pk.calibrationValue;
+      const displayValue = entered !== undefined && entered !== null && String(entered).trim() !== ''
+        && Number.isFinite(Number(entered)) ? escapeHtml(entered) : '';
       valCell = isExport
-        ? `<td style="text-align:right">${pk.calibrationValue !== undefined ? pk.calibrationValue : 'N/A'}</td>`
+        ? `<td style="text-align:right">${displayValue || 'N/A'}</td>`
         : `<td style="text-align:right">
-             <input type="number" value="${pk.calibrationValue || ''}" placeholder="Enter val"
+              <input type="number" value="${displayValue}" placeholder="Enter val"
                     style="background:transparent; border:1px solid rgba(255,255,255,0.2);
                            border-radius:4px; color:#f0883e; width:80px; text-align:right"
                     data-action="set-calibration" data-idx="${i}">
@@ -411,8 +438,12 @@ export function generatePeakRowHTML(pk, i, method, opts = {}) {
     } else if (type === 'N') {
       valCell = `<td style="text-align:right"><span style="color:var(--text-dim); font-size:0.7rem">N/A</span></td>`;
     } else {
-      const calVal = calCurve ? calCurve(pk.area) : null;
-      valCell = `<td style="text-align:right"><span style="color:#238636; font-weight:700">${calVal !== null ? calVal.toFixed(2) : '-'}</span></td>`;
+      const calVal = calModel?.evaluate ? calModel.evaluate(pk.area) : null;
+      const first = calModel?.levels?.[0];
+      const last = calModel?.levels?.at(-1);
+      const extrapolated = Number.isFinite(calVal) && calModel?.levels?.length >= 2 && Number.isFinite(Number(pk.area))
+        && (Number(pk.area) < first.area || Number(pk.area) > last.area);
+      valCell = `<td style="text-align:right"><span style="color:#238636; font-weight:700">${Number.isFinite(calVal) ? calVal.toFixed(2) : '—'}</span>${extrapolated ? '<small class="calibration-extrapolation" style="display:block; font-size:0.65rem">Extrapolated</small>' : ''}</td>`;
     }
     return `<tr style="${rowStyle}">${nameCell}<td style="text-align:center">${rfDisplay}</td>${areaCell}${typeCell}${valCell}</tr>`;
   }

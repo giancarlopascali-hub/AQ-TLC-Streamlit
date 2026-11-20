@@ -154,3 +154,52 @@ test('uncached image fallback opens popup before loading and installs onload bef
   assert.deepEqual(events, ['open', 'image-src']);
   assert.match(popup.writes.at(-1), /AQ-TLC Analytical Report/);
 });
+
+test('area calibration report uses replicate mean areas and labels proportional estimates', async () => {
+  readyState();
+  const lane = state.activeLane;
+  lane.peaks = [{ idx: 5, rf: 0.5, area: 15, area_lb: 4, area_rb: 6, type: 'A' }];
+  lane.fit_groups = [];
+  state.lanes.push({ id: 2, peaks: [
+    { type: 'S', area: 8, calibrationValue: 10 },
+    { type: 'S', area: 12, calibrationValue: 10 },
+  ] });
+  state.integrationMethod = 'calibration';
+  state.shoulderSensitivity = 0;
+  const popup = makePopup();
+  window.open = () => popup;
+  await exportReport();
+  const html = popup.writes.at(-1);
+  assert.match(html, /1 known amount level from 2 standard spots/);
+  assert.match(html, /One-level estimate assumes response is proportional/);
+  assert.match(html, /<td style="text-align:right"><span style="color:#238636; font-weight:700">15\.00<\/span>/);
+});
+
+test('report stops if analysis changes while its image is loading', async () => {
+  readyState();
+  state.imgEl = null;
+  const popup = makePopup();
+  window.open = () => popup;
+  const alerts = [];
+  globalThis.alert = message => alerts.push(message);
+  globalThis.Image = class {
+    complete = false;
+    naturalWidth = 0;
+    set src(_value) {
+      queueMicrotask(() => {
+        state.isProfilePending = true;
+        this.complete = true;
+        this.naturalWidth = 100;
+        this.onload();
+      });
+    }
+  };
+  try {
+    await exportReport();
+    assert.match(popup.writes.at(-1), /analysis changed while preparing the report/);
+    assert.match(alerts[0], /analysis changed while preparing the report/);
+  } finally {
+    globalThis.alert = message => { throw new Error(`Unexpected alert: ${message}`); };
+    state.isProfilePending = false;
+  }
+});

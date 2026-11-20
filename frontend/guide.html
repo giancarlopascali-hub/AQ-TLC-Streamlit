@@ -187,14 +187,14 @@
         </div>
         <div class="mode">
           <h3>Area Calibration</h3>
-          <p>Set known peaks to <strong>S</strong> and enter their values; set unknowns to <strong>A</strong>; use <strong>N</strong> to exclude a peak. One standard gives a line through zero, while two or more valid standards use linear regression.</p>
+          <p>Set known peaks to <strong>S</strong> and enter their amounts; set unknowns to <strong>A</strong>; use <strong>N</strong> to exclude a peak. Spots with the same entered amount form one calibration level, using their mean measured area. One level gives a proportional estimate through zero; two levels give a straight line. Three or more levels use a local three-level quadratic within the standard range, with a straight-line fallback if the quadratic bends backwards. Beyond the standard range, the nearest endpoint line is extended and sample values are marked as extrapolated. Mean areas must increase with known amount.</p>
         </div>
         <div class="mode">
           <h3>MW Calibration</h3>
           <p>Set at least two peaks with known positive molecular weights to <strong>S</strong>, then set unknowns to <strong>A</strong>. The app interpolates or extrapolates piecewise in log<sub>10</sub>(MW) versus Rf space.</p>
         </div>
       </div>
-      <p>Standards are collected from every lane in the current image, so assignments in one lane can affect analyte values elsewhere. Check that standards use consistent units and distinct valid values.</p>
+      <p>Standards are collected from every lane in the current image, so assignments in one lane can affect analyte values elsewhere. Use consistent amount units. The app rescales each lane to the same maximum before calculating area. Spots of the same shape but different darkness can therefore receive the same area. Check calibration using multiple known amounts before relying on absolute results.</p>
 
       <h3>Export reports</h3>
       <ul>
