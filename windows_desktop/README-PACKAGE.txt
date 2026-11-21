@@ -1,4 +1,4 @@
-AQ-TLC Desktop v1.2 for Windows (64-bit)
+AQ-TLC Desktop v1.3 for Windows (64-bit)
 
 1. Extract the whole ZIP before running the app.
 2. Keep AQ-TLC-Desktop.exe and the _internal folder together.
@@ -14,4 +14,8 @@ This Windows package includes the AQ-TLC Desktop analysis backend and interface.
 Shoulder sensitivity can propose overlapping peaks for review. Split and Keep
 single choices, measured and fitted curves, and model-allocated areas appear in
 the analysis and report views.
+Area Calibration now averages replicate standard areas at the same entered
+amount. It assumes zero area means zero amount, fits a curve through that
+assumed point and the measured standards, and uses the last two standards for
+estimates above the measured range. The table and report explain the method.
 Third-party licenses are in _internal/licenses.

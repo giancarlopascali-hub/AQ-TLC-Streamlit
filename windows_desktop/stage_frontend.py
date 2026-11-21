@@ -30,7 +30,7 @@ def stage(destination: Path) -> None:
         text = target.read_text(encoding="utf-8")
         if "v1.1" not in text:
             raise ValueError(f"Expected source version label missing: {relative}")
-        target.write_text(text.replace("v1.1", "v1.2"), encoding="utf-8")
+        target.write_text(text.replace("v1.1", "v1.3"), encoding="utf-8")
 
 
 if __name__ == "__main__":

@@ -8,9 +8,12 @@ import io
 import json
 import math
 import sys
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from PIL import Image
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
 def request(port: int, method: str, path: str, data: object = None):
@@ -44,7 +47,7 @@ def main(url: str) -> None:
     status, body = request(port, "GET", "/health")
     assert status == 200 and json.loads(body)["status"] == "ok"
     status, body = request(port, "GET", "/")
-    assert status == 200 and b"AQ-TLC v1.2" in body
+    assert status == 200 and b"AQ-TLC v1.3" in body
     assert b'id="shoulder-sensitivity"' in body
     assert b"fonts.googleapis.com" not in body  # offline staging
     status, body = request(port, "GET", "/modules/streamlit_bridge.js")
@@ -55,6 +58,14 @@ def main(url: str) -> None:
     assert status == 200 and b"applyFitDecision" in body
     status, body = request(port, "GET", "/modules/api.js")
     assert status == 200 and b"shoulder_sensitivity" in body
+    status, body = request(port, "GET", "/modules/analysis.js")
+    assert status == 200 and body == (REPO_ROOT / "frontend" / "modules" / "analysis.js").read_bytes()
+    assert b"buildAreaCalibrationModel" in body and b"zeroAmountConflict" in body
+    status, body = request(port, "GET", "/modules/profiles.js")
+    assert status == 200 and body == (REPO_ROOT / "frontend" / "modules" / "profiles.js").read_bytes()
+    assert b"Interpolation from assumed zero point" in body
+    status, body = request(port, "GET", "/guide.html")
+    assert status == 200 and b"zero area means zero amount" in body
 
     image = Image.new("RGB", (64, 96), color=(180, 180, 180))
     for y in range(30, 55):
@@ -119,7 +130,7 @@ def main(url: str) -> None:
     status, body = request(port, "POST", "/api", crop)
     data = json.loads(body)
     assert status == 200 and data["ok"] and data["data"]["image"].startswith("data:image/jpeg;base64,"), data
-    print("Packaged app served v1.2 and completed profile, shoulder split, area conservation, and crop checks.")
+    print("Packaged app served v1.3 calibration source and completed profile, shoulder split, area conservation, and crop checks.")
 
 
 if __name__ == "__main__":
