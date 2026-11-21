@@ -15,38 +15,45 @@ test('replicates at one amount become one mean-area, through-zero calibration le
   const plate = lanes(standard(8, 10), standard(12, '10'));
   const model = buildAreaCalibrationModel(plate);
   assert.deepEqual(model.levels, [{ value: 10, area: 10, replicates: 2 }]);
+  assert.equal(model.evaluate(0), 0);
   assert.equal(model.evaluate(5), 5);
   assert.equal(model.evaluate(20), 20);
   state.lanes = plate;
   assert.equal(calculateCalibrationCurve()(20), 20);
-  assert.match(buildCalibrationNoteHTML(model), /One-level estimate assumes response is proportional/);
+  assert.match(buildCalibrationNoteHTML(model), /One measured level gives a proportional straight line through the assumed zero point/);
 });
 
-test('two distinct amounts use mean areas and a straight line, including endpoint extension', () => {
+test('two distinct amounts use an origin-anchored quadratic and an upper endpoint line', () => {
   const model = buildAreaCalibrationModel(lanes(
     standard(8, 10), standard(12, 10), standard(28, 20), standard(32, 20),
   ));
   assert.deepEqual(model.levels.map(level => [level.value, level.area, level.replicates]),
     [[10, 10, 2], [20, 30, 2]]);
-  assert.equal(model.evaluate(20), 15);
+  assert.equal(model.evaluate(0), 0);
+  assert.ok(Math.abs(model.evaluate(5) - 5.416666666666667) < 1e-12);
+  assert.ok(Math.abs(model.evaluate(20) - 16.666666666666668) < 1e-12);
   assert.equal(model.evaluate(30), 20);
   assert.equal(model.evaluate(40), 25);
-  assert.equal(model.evaluate(0), 5);
   assert.match(generatePeakRowHTML({ type: 'A', rf: 0.5, area: 40 }, 0, 'calibration', { calModel: model }),
     /Linear extrapolation outside standards; use caution/);
+  assert.match(generatePeakRowHTML({ type: 'A', rf: 0.5, area: 5 }, 0, 'calibration', { calModel: model }),
+    /Interpolation from assumed zero point/);
 });
 
 test('three and four levels use local quadratic interpolation within a fixed bracket', () => {
   const three = buildAreaCalibrationModel(lanes(standard(1, 1), standard(2, 4), standard(3, 9)));
+  assert.equal(three.evaluate(0), 0);
+  assert.equal(three.evaluate(0.5), 0.25, 'a zero derivative at the origin is allowed');
   assert.equal(three.evaluate(1.5), 2.25);
   assert.equal(three.evaluate(2.5), 6.25);
+  assert.equal(three.evaluate(4), 14, 'above the highest measured level uses the final pair line');
   const four = buildAreaCalibrationModel(lanes(
     standard(1, 1), standard(2, 4), standard(3, 9), standard(4, 16),
   ));
   assert.equal(four.evaluate(2.5), 6.25);
   assert.equal(four.evaluate(3.5), 12.25);
   assert.deepEqual(four.levels.map(level => four.evaluate(level.area)), [1, 4, 9, 16]);
-  assert.equal(four.evaluate(5), 25, 'outside the range extends the last quadratic');
+  assert.equal(four.evaluate(5), 23, 'above the range uses the last measured pair line');
   const uneven = buildAreaCalibrationModel(lanes(
     standard(1, 1), standard(2, 4), standard(3, 9), standard(4, 17),
   ));
@@ -59,32 +66,34 @@ test('three and four levels use local quadratic interpolation within a fixed bra
     assert.ok(value >= previous - 1e-9);
     previous = value;
   }
-  assert.equal(uneven.evaluate(0.5), 0.25, 'four-level lower extrapolation uses the first triplet');
-  assert.equal(uneven.evaluate(5), 28, 'four-level upper extrapolation uses the last triplet');
+  assert.equal(uneven.evaluate(0.5), 0.25, 'the first bracket uses the assumed origin');
+  assert.equal(uneven.evaluate(5), 25, 'the upper line uses the last two measured levels');
   assert.ok(Math.abs(uneven.evaluate(1 - 1e-6) - 1) < 1e-5);
   assert.ok(Math.abs(uneven.evaluate(4 + 1e-6) - 17) < 1e-5);
 });
 
-test('three-level quadratic extrapolation is labelled and rejects a reversing lower tail', () => {
+test('three measured levels preserve interior calibration and restore upper endpoint line', () => {
   const model = buildAreaCalibrationModel(lanes(
     standard(553.9, 50), standard(755.3, 80), standard(859.65, 100),
   ));
-  assert.ok(Math.abs(model.evaluate(250) - 26.1803346374) < 1e-8);
-  assert.ok(Math.abs(model.evaluate(900) - 108.5490967265) < 1e-8);
-  assert.equal(model.evaluate(0), null);
-  assert.match(buildCalibrationNoteHTML(model), /nearest three levels define quadratic extrapolation/);
+  assert.equal(model.evaluate(0), 0);
+  assert.ok(Math.abs(model.evaluate(500) - 43.0404327444) < 1e-8);
+  assert.ok(Math.abs(model.evaluate(789) - 86.1264811947) < 1e-8);
+  assert.ok(Math.abs(model.evaluate(900) - 107.7335888836) < 1e-8);
+  assert.match(buildCalibrationNoteHTML(model), /last two measured levels define straight-line extrapolation/);
   assert.match(generatePeakRowHTML({ type: 'A', rf: 0.5, area: 900 }, 0, 'calibration', { calModel: model }),
-    /Quadratic extrapolation outside standards; use caution/);
+    /Linear extrapolation outside standards; use caution/);
   assert.match(generatePeakRowHTML({ type: 'A', rf: 0.5, area: 0 }, 0, 'calibration', { calModel: model }),
-    /Extrapolation unavailable: curve would reverse or give an invalid amount/);
+    /Interpolation from assumed zero point/);
 });
 
-test('quadratic extrapolation does not report negative or reversed predictions', () => {
-  const lowerReversal = buildAreaCalibrationModel(lanes(standard(1, 1), standard(2, 2), standard(3, 20)));
-  assert.equal(lowerReversal.evaluate(0), null, 'a positive but backward lower tail is unavailable');
-  const upperReversal = buildAreaCalibrationModel(lanes(standard(1, 1), standard(2, 8), standard(3, 9)));
-  assert.equal(upperReversal.evaluate(4), null, 'a backward upper tail is unavailable');
-  assert.equal(upperReversal.evaluate(0), null, 'a negative lower estimate is unavailable');
+test('a backward-bending origin segment falls back to its straight line', () => {
+  const two = buildAreaCalibrationModel(lanes(standard(1, 1), standard(2, 20)));
+  assert.equal(two.evaluate(0), 0);
+  assert.equal(two.evaluate(0.5), 0.5);
+  assert.equal(two.evaluate(1.5), 8.25, 'the valid measured bracket keeps its quadratic');
+  const three = buildAreaCalibrationModel(lanes(standard(1, 1), standard(2, 20), standard(3, 21)));
+  assert.equal(three.evaluate(0.5), 0.5);
 });
 
 test('backward-bending local quadratics fall back to their bracket line', () => {
@@ -104,8 +113,16 @@ test('equal or decreasing mean response and unusable standards are visible error
     assert.equal(model.evaluate, null);
     assert.match(buildCalibrationNoteHTML(model), /Calibration unavailable: Mean standard areas must increase/);
   }
-  const zeroOnly = buildAreaCalibrationModel(lanes(standard(10, 0)));
-  assert.match(zeroOnly.error, /zero-amount/);
+  const zeroConflict = buildAreaCalibrationModel(lanes(standard(10, 0), standard(12, 5)));
+  assert.match(zeroConflict.error, /zero-amount S standard has positive area/);
+  assert.equal(zeroConflict.evaluate, null);
+  assert.deepEqual(zeroConflict.levels, [{ value: 5, area: 12, replicates: 1 }]);
+  const redundantZero = buildAreaCalibrationModel(lanes(standard(0, 0), standard(12, 5)));
+  assert.deepEqual(redundantZero.levels, [{ value: 5, area: 12, replicates: 1 }]);
+  assert.equal(redundantZero.skippedCount, 0);
+  assert.equal(redundantZero.evaluate(0), 0);
+  const nearOrigin = buildAreaCalibrationModel(lanes(standard(1e-10, 5), standard(12, 10)));
+  assert.match(nearOrigin.error, /too close to the assumed zero-area origin/);
   const blank = buildAreaCalibrationModel(lanes(standard(10, null), standard(11, ''), standard(12, 5)));
   assert.equal(blank.skippedCount, 2);
   assert.equal(blank.evaluate(24), 10);

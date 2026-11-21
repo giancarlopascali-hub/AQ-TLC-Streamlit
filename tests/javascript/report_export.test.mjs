@@ -171,11 +171,11 @@ test('area calibration report uses replicate mean areas and labels proportional 
   await exportReport();
   const html = popup.writes.at(-1);
   assert.match(html, /1 known amount level from 2 standard spots/);
-  assert.match(html, /One-level estimate assumes response is proportional/);
+  assert.match(html, /One measured level gives a proportional straight line through the assumed zero point/);
   assert.match(html, /<td style="text-align:right"><span style="color:#238636; font-weight:700">15\.00<\/span>/);
 });
 
-test('area calibration report marks quadratic extrapolation and guarded unavailable values', async () => {
+test('area calibration report uses the assumed zero point and linear upper extrapolation', async () => {
   readyState();
   const lane = state.activeLane;
   lane.peaks = [
@@ -194,10 +194,36 @@ test('area calibration report marks quadratic extrapolation and guarded unavaila
   window.open = () => popup;
   await exportReport();
   const html = popup.writes.at(-1);
-  assert.match(html, /nearest three levels define quadratic extrapolation/);
-  assert.match(html, /Extrapolation unavailable: curve would reverse or give an invalid amount/);
-  assert.match(html, /108\.55<\/span><small class="calibration-extrapolation"/);
-  assert.match(html, /Quadratic extrapolation outside standards; use caution/);
+  assert.match(html, /Zero area is assumed to mean zero amount/);
+  assert.match(html, /last two measured levels define straight-line extrapolation/);
+  assert.match(html, /0\.00<\/span>/);
+  assert.match(html, /107\.73<\/span><small class="calibration-extrapolation"/);
+  assert.match(html, /Linear extrapolation outside standards; use caution/);
+});
+
+test('area calibration report fits two measured levels with the assumed zero point', async () => {
+  readyState();
+  const lane = state.activeLane;
+  lane.peaks = [
+    { idx: 4, rf: 0.6, area: 0.5, area_lb: 3, area_rb: 5, type: 'A' },
+    { idx: 6, rf: 0.4, area: 1.5, area_lb: 5, area_rb: 7, type: 'A' },
+  ];
+  lane.fit_groups = [];
+  state.lanes.push({ id: 2, peaks: [
+    { type: 'S', area: 1, calibrationValue: 1 },
+    { type: 'S', area: 2, calibrationValue: 4 },
+  ] });
+  state.integrationMethod = 'calibration';
+  state.shoulderSensitivity = 0;
+  const popup = makePopup();
+  window.open = () => popup;
+  await exportReport();
+  const html = popup.writes.at(-1);
+  assert.match(html, /2 known amount levels from 2 standard spots/);
+  assert.match(html, /Two measured levels and the assumed zero point define a quadratic/);
+  assert.match(html, /0\.25<\/span><small class="calibration-extrapolation"/);
+  assert.match(html, /Interpolation from assumed zero point/);
+  assert.match(html, /2\.25<\/span>/);
 });
 
 test('report stops if analysis changes while its image is loading', async () => {

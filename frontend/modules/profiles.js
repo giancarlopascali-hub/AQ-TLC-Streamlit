@@ -310,11 +310,14 @@ export function buildCalibrationNoteHTML(model) {
   } else {
     const pooling = `${model.levels.length} known amount level${model.levels.length === 1 ? '' : 's'} from ${spots} standard spot${spots === 1 ? '' : 's'}; replicate areas at the same amount are averaged.`;
     const method = model.levels.length === 1
-      ? 'One-level estimate assumes response is proportional to amount through zero.'
+      ? 'One measured level gives a proportional straight line through the assumed zero point.'
       : model.levels.length === 2
-        ? 'Two-level straight line; values outside the standard area range are linearly extrapolated.'
-        : 'Local three-level quadratic interpolation with a straight-line safeguard inside the standard range. Outside it, the nearest three levels define quadratic extrapolation; a reversing or negative estimate is unavailable.';
-    description = `Area calibration: ${pooling} ${method}`;
+        ? 'Two measured levels and the assumed zero point define a quadratic within the standard range. A segment that bends backwards uses a straight line.'
+        : 'Local three-point quadratic interpolation uses neighbouring measured levels; below the first measured level it also uses the assumed zero point. A segment that bends backwards uses a straight line.';
+    const extension = model.levels.length > 1
+      ? 'Above the highest standard, the last two measured levels define straight-line extrapolation.'
+      : 'Values above the standard use the same proportional line.';
+    description = `Area calibration: ${pooling} Zero area is assumed to mean zero amount. ${method} ${extension}`;
   }
   if (model.skippedCount) description += ` ${model.skippedCount} incomplete or invalid S spot${model.skippedCount === 1 ? ' was' : 's were'} excluded.`;
   const style = model.error
@@ -442,17 +445,18 @@ export function generatePeakRowHTML(pk, i, method, opts = {}) {
       const first = calModel?.levels?.[0];
       const last = calModel?.levels?.at(-1);
       const area = Number(pk.area);
-      const outside = !calModel?.error && calModel?.levels?.length > 0 && Number.isFinite(area) && area >= 0
-        && (area < first.area || area > last.area);
-      const areaNote = outside && calModel.levels.length >= 3 && !Number.isFinite(calVal)
-        ? 'Extrapolation unavailable: curve would reverse or give an invalid amount.'
-        : outside && Number.isFinite(calVal)
+      const belowMeasured = !calModel?.error && Number.isFinite(area) && area >= 0 && area < first?.area;
+      const aboveMeasured = !calModel?.error && Number.isFinite(area) && area > last?.area;
+      const areaNote = !Number.isFinite(calVal) ? ''
+        : aboveMeasured
           ? calModel.levels.length === 1
             ? 'Proportional estimate outside standard area; use caution.'
-            : calModel.levels.length === 2
-              ? 'Linear extrapolation outside standards; use caution.'
-              : 'Quadratic extrapolation outside standards; use caution.'
-          : '';
+            : 'Linear extrapolation outside standards; use caution.'
+          : belowMeasured
+            ? calModel.levels.length === 1
+              ? 'Proportional estimate from assumed zero point.'
+              : 'Interpolation from assumed zero point.'
+            : '';
       valCell = `<td style="text-align:right"><span style="color:#238636; font-weight:700">${Number.isFinite(calVal) ? calVal.toFixed(2) : '—'}</span>${areaNote ? `<small class="calibration-extrapolation" style="display:block; font-size:0.65rem">${areaNote}</small>` : ''}</td>`;
     }
     return `<tr style="${rowStyle}">${nameCell}<td style="text-align:center">${rfDisplay}</td>${areaCell}${typeCell}${valCell}</tr>`;

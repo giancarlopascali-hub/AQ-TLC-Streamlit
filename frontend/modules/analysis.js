@@ -115,6 +115,7 @@ export function findPeakBounds(profile, apex, thresholdPercent = 50) {
 export function buildAreaCalibrationModel(lanes = state.lanes) {
   const groups = new Map();
   let skippedCount = 0;
+  let zeroAmountConflict = false;
   for (const lane of lanes || []) {
     for (const peak of lane.peaks || []) {
       if (peak.type !== 'S') continue;
@@ -122,6 +123,12 @@ export function buildAreaCalibrationModel(lanes = state.lanes) {
       const value = entered === undefined || entered === null || String(entered).trim() === ''
         ? NaN : Number(entered);
       const area = Number(peak.area);
+      if (value === 0 && Number.isFinite(area) && area > 0) {
+        zeroAmountConflict = true;
+        continue;
+      }
+      // A measured 0/0 spot adds no information beyond the assumed origin.
+      if (value === 0 && peak.area !== undefined && peak.area !== null && area === 0) continue;
       if (!Number.isFinite(value) || value < 0 || !Number.isFinite(area) || area <= 0) {
         skippedCount++;
         continue;
@@ -137,16 +144,18 @@ export function buildAreaCalibrationModel(lanes = state.lanes) {
     .map(group => ({ value: group.value, area: group.areaSum / group.replicates, replicates: group.replicates }))
     .sort((left, right) => left.value - right.value);
   const fail = error => ({ evaluate: null, error, levels, skippedCount });
+  if (zeroAmountConflict) {
+    return fail('A zero-amount S standard has positive area and conflicts with the assumed zero-area origin.');
+  }
   if (!levels.length) return fail('Add an S standard with a known amount and a positive measured area.');
   if (levels.some(level => !Number.isFinite(level.area))) return fail('Standard mean areas must be finite.');
+  if (levels[0].area <= 1e-9 * Math.max(1, levels[0].area)) {
+    return fail('The first mean standard area is too close to the assumed zero-area origin.');
+  }
   if (levels.some((level, index) => index > 0 &&
       level.area - levels[index - 1].area <= 1e-9 * Math.max(1, level.area, levels[index - 1].area))) {
     return fail('Mean standard areas must increase with known amount. Check the standards and integration windows.');
   }
-  if (levels.length === 1 && levels[0].value === 0) {
-    return fail('A single zero-amount standard cannot define a proportional calibration.');
-  }
-
   const straightLine = (left, right, area) =>
     left.value + (area - left.area) * (right.value - left.value) / (right.area - left.area);
   const quadraticThrough = points => {
@@ -163,48 +172,43 @@ export function buildAreaCalibrationModel(lanes = state.lanes) {
   const evaluate = inputArea => {
     const area = Number(inputArea);
     if (!Number.isFinite(area) || area < 0) return null;
+    if (area === 0) return 0;
     // Exact standards retain their entered values even at a bracket boundary.
     const exact = levels.find(level => Math.abs(area - level.area) <= 1e-12 * Math.max(1, area));
     if (exact) return exact.value;
     if (levels.length === 1) return area * levels[0].value / levels[0].area;
     const last = levels.length - 1;
-    if (area < levels[0].area || area > levels[last].area) {
-      const below = area < levels[0].area;
-      if (levels.length === 2) {
-        const left = below ? levels[0] : levels[last - 1];
-        const right = below ? levels[1] : levels[last];
-        return Math.max(0, straightLine(left, right, area));
-      }
-      const endpoint = below ? levels[0] : levels[last];
-      const curve = quadraticThrough(below ? levels.slice(0, 3) : levels.slice(-3));
-      const estimate = curve.valueAt(area);
-      const endpointSlope = curve.derivativeAt(endpoint.area);
-      const querySlope = curve.derivativeAt(area);
-      // The derivative of a quadratic is linear. Positive slopes at both
-      // ends ensure the extrapolation never reverses between them.
-      const monotone = Number.isFinite(endpointSlope) && endpointSlope > 0
-        && Number.isFinite(querySlope) && querySlope > 0;
-      const onExpectedSide = below ? estimate <= endpoint.value : estimate >= endpoint.value;
-      return Number.isFinite(estimate) && estimate >= 0 && monotone && onExpectedSide
-        ? estimate : null;
+    if (area > levels[last].area) {
+      return Math.max(0, straightLine(levels[last - 1], levels[last], area));
     }
 
-    const bracket = levels.findIndex((level, index) => index < last && area > level.area && area < levels[index + 1].area);
-    if (bracket < 0) return null;
-    const left = levels[bracket], right = levels[bracket + 1];
+    const origin = { area: 0, value: 0 };
+    let left, right, third;
+    if (area < levels[0].area) {
+      [left, right, third] = [origin, levels[0], levels[1]];
+    } else {
+      const bracket = levels.findIndex((level, index) => index < last && area > level.area && area < levels[index + 1].area);
+      if (bracket < 0) return null;
+      left = levels[bracket];
+      right = levels[bracket + 1];
+      // For three or more measured levels, preserve the existing local
+      // measured-standard triplet throughout every measured-to-measured bracket.
+      third = levels.length === 2 ? origin
+        : bracket === 0 ? levels[2] : bracket + 2 > last ? levels[bracket - 1]
+          : left.area - levels[bracket - 1].area <= levels[bracket + 2].area - right.area
+            ? levels[bracket - 1] : levels[bracket + 2];
+    }
     const linear = straightLine(left, right, area);
-    if (levels.length === 2) return Math.max(0, linear);
-
-    // Choose one fixed neighbouring triplet per bracket, so the prediction
-    // cannot jump because the third point changes inside that bracket.
-    const third = bracket === 0 ? levels[2] : bracket + 2 > last ? levels[bracket - 1]
-      : left.area - levels[bracket - 1].area <= levels[bracket + 2].area - right.area
-        ? levels[bracket - 1] : levels[bracket + 2];
     const curve = quadraticThrough([left, right, third]);
     const quadratic = curve.valueAt(area);
     // A local quadratic may bend backwards despite increasing standards.
     // Reject that shape for the whole bracket, not only one query position.
-    const monotone = curve.derivativeAt(left.area) > 0 && curve.derivativeAt(right.area) > 0;
+    const leftSlope = curve.derivativeAt(left.area);
+    const rightSlope = curve.derivativeAt(right.area);
+    const originTolerance = 1e-12 * Math.max(1, Math.abs(rightSlope));
+    const monotone = Number.isFinite(leftSlope) && Number.isFinite(rightSlope)
+      && (left.area === 0 ? leftSlope >= -originTolerance : leftSlope > 0)
+      && rightSlope > 0;
     const inBracket = quadratic >= left.value - 1e-9 && quadratic <= right.value + 1e-9;
     return Math.max(0, monotone && inBracket && Number.isFinite(quadratic) ? quadratic : linear);
   };
