@@ -313,7 +313,7 @@ export function buildCalibrationNoteHTML(model) {
       ? 'One-level estimate assumes response is proportional to amount through zero.'
       : model.levels.length === 2
         ? 'Two-level straight line; values outside the standard area range are linearly extrapolated.'
-        : 'Local three-level quadratic interpolation with a straight-line safeguard; values outside the standard area range are linearly extrapolated.';
+        : 'Local three-level quadratic interpolation with a straight-line safeguard inside the standard range. Outside it, the nearest three levels define quadratic extrapolation; a reversing or negative estimate is unavailable.';
     description = `Area calibration: ${pooling} ${method}`;
   }
   if (model.skippedCount) description += ` ${model.skippedCount} incomplete or invalid S spot${model.skippedCount === 1 ? ' was' : 's were'} excluded.`;
@@ -441,9 +441,19 @@ export function generatePeakRowHTML(pk, i, method, opts = {}) {
       const calVal = calModel?.evaluate ? calModel.evaluate(pk.area) : null;
       const first = calModel?.levels?.[0];
       const last = calModel?.levels?.at(-1);
-      const extrapolated = Number.isFinite(calVal) && calModel?.levels?.length >= 2 && Number.isFinite(Number(pk.area))
-        && (Number(pk.area) < first.area || Number(pk.area) > last.area);
-      valCell = `<td style="text-align:right"><span style="color:#238636; font-weight:700">${Number.isFinite(calVal) ? calVal.toFixed(2) : '—'}</span>${extrapolated ? '<small class="calibration-extrapolation" style="display:block; font-size:0.65rem">Extrapolated</small>' : ''}</td>`;
+      const area = Number(pk.area);
+      const outside = !calModel?.error && calModel?.levels?.length > 0 && Number.isFinite(area) && area >= 0
+        && (area < first.area || area > last.area);
+      const areaNote = outside && calModel.levels.length >= 3 && !Number.isFinite(calVal)
+        ? 'Extrapolation unavailable: curve would reverse or give an invalid amount.'
+        : outside && Number.isFinite(calVal)
+          ? calModel.levels.length === 1
+            ? 'Proportional estimate outside standard area; use caution.'
+            : calModel.levels.length === 2
+              ? 'Linear extrapolation outside standards; use caution.'
+              : 'Quadratic extrapolation outside standards; use caution.'
+          : '';
+      valCell = `<td style="text-align:right"><span style="color:#238636; font-weight:700">${Number.isFinite(calVal) ? calVal.toFixed(2) : '—'}</span>${areaNote ? `<small class="calibration-extrapolation" style="display:block; font-size:0.65rem">${areaNote}</small>` : ''}</td>`;
     }
     return `<tr style="${rowStyle}">${nameCell}<td style="text-align:center">${rfDisplay}</td>${areaCell}${typeCell}${valCell}</tr>`;
   }

@@ -187,7 +187,7 @@
         </div>
         <div class="mode">
           <h3>Area Calibration</h3>
-          <p>Set known peaks to <strong>S</strong> and enter their amounts; set unknowns to <strong>A</strong>; use <strong>N</strong> to exclude a peak. Spots with the same entered amount form one calibration level, using their mean measured area. One level gives a proportional estimate through zero; two levels give a straight line. Three or more levels use a local three-level quadratic within the standard range, with a straight-line fallback if the quadratic bends backwards. Beyond the standard range, the nearest endpoint line is extended and sample values are marked as extrapolated. Mean areas must increase with known amount.</p>
+          <p>Set known peaks to <strong>S</strong> and enter their amounts; set unknowns to <strong>A</strong>; use <strong>N</strong> to exclude a peak. Spots with the same entered amount form one calibration level, using their mean measured area. One level gives a proportional estimate through zero; two levels give a straight line. Three or more levels use a local three-level quadratic within the standard range, with a straight-line fallback if the quadratic bends backwards. Below or above the standards, the app extends the quadratic through the first or last three levels. An estimate is unavailable if that extension reverses direction or gives a negative amount. Results outside the standard range are labelled for caution. Mean areas must increase with known amount.</p>
         </div>
         <div class="mode">
           <h3>MW Calibration</h3>

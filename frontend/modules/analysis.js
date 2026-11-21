@@ -149,6 +149,17 @@ export function buildAreaCalibrationModel(lanes = state.lanes) {
 
   const straightLine = (left, right, area) =>
     left.value + (area - left.area) * (right.value - left.value) / (right.area - left.area);
+  const quadraticThrough = points => {
+    const [first, middle, final] = [...points].sort((a, b) => a.area - b.area);
+    const slope01 = (middle.value - first.value) / (middle.area - first.area);
+    const slope12 = (final.value - middle.value) / (final.area - middle.area);
+    const curvature = (slope12 - slope01) / (final.area - first.area);
+    return {
+      valueAt: area => first.value + slope01 * (area - first.area)
+        + curvature * (area - first.area) * (area - middle.area),
+      derivativeAt: area => slope01 + curvature * (2 * area - first.area - middle.area),
+    };
+  };
   const evaluate = inputArea => {
     const area = Number(inputArea);
     if (!Number.isFinite(area) || area < 0) return null;
@@ -156,9 +167,27 @@ export function buildAreaCalibrationModel(lanes = state.lanes) {
     const exact = levels.find(level => Math.abs(area - level.area) <= 1e-12 * Math.max(1, area));
     if (exact) return exact.value;
     if (levels.length === 1) return area * levels[0].value / levels[0].area;
-    if (area < levels[0].area) return Math.max(0, straightLine(levels[0], levels[1], area));
     const last = levels.length - 1;
-    if (area > levels[last].area) return Math.max(0, straightLine(levels[last - 1], levels[last], area));
+    if (area < levels[0].area || area > levels[last].area) {
+      const below = area < levels[0].area;
+      if (levels.length === 2) {
+        const left = below ? levels[0] : levels[last - 1];
+        const right = below ? levels[1] : levels[last];
+        return Math.max(0, straightLine(left, right, area));
+      }
+      const endpoint = below ? levels[0] : levels[last];
+      const curve = quadraticThrough(below ? levels.slice(0, 3) : levels.slice(-3));
+      const estimate = curve.valueAt(area);
+      const endpointSlope = curve.derivativeAt(endpoint.area);
+      const querySlope = curve.derivativeAt(area);
+      // The derivative of a quadratic is linear. Positive slopes at both
+      // ends ensure the extrapolation never reverses between them.
+      const monotone = Number.isFinite(endpointSlope) && endpointSlope > 0
+        && Number.isFinite(querySlope) && querySlope > 0;
+      const onExpectedSide = below ? estimate <= endpoint.value : estimate >= endpoint.value;
+      return Number.isFinite(estimate) && estimate >= 0 && monotone && onExpectedSide
+        ? estimate : null;
+    }
 
     const bracket = levels.findIndex((level, index) => index < last && area > level.area && area < levels[index + 1].area);
     if (bracket < 0) return null;
@@ -171,17 +200,11 @@ export function buildAreaCalibrationModel(lanes = state.lanes) {
     const third = bracket === 0 ? levels[2] : bracket + 2 > last ? levels[bracket - 1]
       : left.area - levels[bracket - 1].area <= levels[bracket + 2].area - right.area
         ? levels[bracket - 1] : levels[bracket + 2];
-    const trio = [left, right, third].sort((a, b) => a.area - b.area);
-    const [first, middle, final] = trio;
-    const slope01 = (middle.value - first.value) / (middle.area - first.area);
-    const slope12 = (final.value - middle.value) / (final.area - middle.area);
-    const curvature = (slope12 - slope01) / (final.area - first.area);
-    const derivative = x => slope01 + curvature * (2 * x - first.area - middle.area);
-    const quadratic = first.value + slope01 * (area - first.area)
-      + curvature * (area - first.area) * (area - middle.area);
+    const curve = quadraticThrough([left, right, third]);
+    const quadratic = curve.valueAt(area);
     // A local quadratic may bend backwards despite increasing standards.
     // Reject that shape for the whole bracket, not only one query position.
-    const monotone = derivative(left.area) > 0 && derivative(right.area) > 0;
+    const monotone = curve.derivativeAt(left.area) > 0 && curve.derivativeAt(right.area) > 0;
     const inBracket = quadratic >= left.value - 1e-9 && quadratic <= right.value + 1e-9;
     return Math.max(0, monotone && inBracket && Number.isFinite(quadratic) ? quadratic : linear);
   };

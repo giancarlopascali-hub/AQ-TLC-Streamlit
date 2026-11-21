@@ -32,7 +32,8 @@ test('two distinct amounts use mean areas and a straight line, including endpoin
   assert.equal(model.evaluate(30), 20);
   assert.equal(model.evaluate(40), 25);
   assert.equal(model.evaluate(0), 5);
-  assert.match(generatePeakRowHTML({ type: 'A', rf: 0.5, area: 40 }, 0, 'calibration', { calModel: model }), /Extrapolated/);
+  assert.match(generatePeakRowHTML({ type: 'A', rf: 0.5, area: 40 }, 0, 'calibration', { calModel: model }),
+    /Linear extrapolation outside standards; use caution/);
 });
 
 test('three and four levels use local quadratic interpolation within a fixed bracket', () => {
@@ -45,7 +46,7 @@ test('three and four levels use local quadratic interpolation within a fixed bra
   assert.equal(four.evaluate(2.5), 6.25);
   assert.equal(four.evaluate(3.5), 12.25);
   assert.deepEqual(four.levels.map(level => four.evaluate(level.area)), [1, 4, 9, 16]);
-  assert.equal(four.evaluate(5), 23, 'outside the range uses the last endpoint line');
+  assert.equal(four.evaluate(5), 25, 'outside the range extends the last quadratic');
   const uneven = buildAreaCalibrationModel(lanes(
     standard(1, 1), standard(2, 4), standard(3, 9), standard(4, 17),
   ));
@@ -58,6 +59,32 @@ test('three and four levels use local quadratic interpolation within a fixed bra
     assert.ok(value >= previous - 1e-9);
     previous = value;
   }
+  assert.equal(uneven.evaluate(0.5), 0.25, 'four-level lower extrapolation uses the first triplet');
+  assert.equal(uneven.evaluate(5), 28, 'four-level upper extrapolation uses the last triplet');
+  assert.ok(Math.abs(uneven.evaluate(1 - 1e-6) - 1) < 1e-5);
+  assert.ok(Math.abs(uneven.evaluate(4 + 1e-6) - 17) < 1e-5);
+});
+
+test('three-level quadratic extrapolation is labelled and rejects a reversing lower tail', () => {
+  const model = buildAreaCalibrationModel(lanes(
+    standard(553.9, 50), standard(755.3, 80), standard(859.65, 100),
+  ));
+  assert.ok(Math.abs(model.evaluate(250) - 26.1803346374) < 1e-8);
+  assert.ok(Math.abs(model.evaluate(900) - 108.5490967265) < 1e-8);
+  assert.equal(model.evaluate(0), null);
+  assert.match(buildCalibrationNoteHTML(model), /nearest three levels define quadratic extrapolation/);
+  assert.match(generatePeakRowHTML({ type: 'A', rf: 0.5, area: 900 }, 0, 'calibration', { calModel: model }),
+    /Quadratic extrapolation outside standards; use caution/);
+  assert.match(generatePeakRowHTML({ type: 'A', rf: 0.5, area: 0 }, 0, 'calibration', { calModel: model }),
+    /Extrapolation unavailable: curve would reverse or give an invalid amount/);
+});
+
+test('quadratic extrapolation does not report negative or reversed predictions', () => {
+  const lowerReversal = buildAreaCalibrationModel(lanes(standard(1, 1), standard(2, 2), standard(3, 20)));
+  assert.equal(lowerReversal.evaluate(0), null, 'a positive but backward lower tail is unavailable');
+  const upperReversal = buildAreaCalibrationModel(lanes(standard(1, 1), standard(2, 8), standard(3, 9)));
+  assert.equal(upperReversal.evaluate(4), null, 'a backward upper tail is unavailable');
+  assert.equal(upperReversal.evaluate(0), null, 'a negative lower estimate is unavailable');
 });
 
 test('backward-bending local quadratics fall back to their bracket line', () => {

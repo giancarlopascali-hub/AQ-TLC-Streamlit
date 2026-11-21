@@ -175,6 +175,31 @@ test('area calibration report uses replicate mean areas and labels proportional 
   assert.match(html, /<td style="text-align:right"><span style="color:#238636; font-weight:700">15\.00<\/span>/);
 });
 
+test('area calibration report marks quadratic extrapolation and guarded unavailable values', async () => {
+  readyState();
+  const lane = state.activeLane;
+  lane.peaks = [
+    { idx: 4, rf: 0.6, area: 0, area_lb: 3, area_rb: 5, type: 'A' },
+    { idx: 6, rf: 0.4, area: 900, area_lb: 5, area_rb: 7, type: 'A' },
+  ];
+  lane.fit_groups = [];
+  state.lanes.push({ id: 2, peaks: [
+    { type: 'S', area: 553.9, calibrationValue: 50 },
+    { type: 'S', area: 755.3, calibrationValue: 80 },
+    { type: 'S', area: 859.65, calibrationValue: 100 },
+  ] });
+  state.integrationMethod = 'calibration';
+  state.shoulderSensitivity = 0;
+  const popup = makePopup();
+  window.open = () => popup;
+  await exportReport();
+  const html = popup.writes.at(-1);
+  assert.match(html, /nearest three levels define quadratic extrapolation/);
+  assert.match(html, /Extrapolation unavailable: curve would reverse or give an invalid amount/);
+  assert.match(html, /108\.55<\/span><small class="calibration-extrapolation"/);
+  assert.match(html, /Quadratic extrapolation outside standards; use caution/);
+});
+
 test('report stops if analysis changes while its image is loading', async () => {
   readyState();
   state.imgEl = null;
