@@ -1,6 +1,7 @@
 /** Shared presentation helpers for optional shoulder fitting. */
 
 export const DEFAULT_SHOULDER_SENSITIVITY = 0;
+export const DEFAULT_MAX_PEAK_ASYMMETRY = 1;
 
 export function normalizeShoulderSensitivity(value) {
   const number = Number(value);
@@ -12,6 +13,20 @@ export function shoulderSensitivityLabel(value) {
   return sensitivity === 0 ? 'Off' : String(sensitivity);
 }
 
+export function normalizeMaxPeakAsymmetry(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.round(Math.max(1, Math.min(5, number)) * 10) / 10 : DEFAULT_MAX_PEAK_ASYMMETRY;
+}
+
+export function maxPeakAsymmetryLabel(value) {
+  return normalizeMaxPeakAsymmetry(value).toFixed(1);
+}
+
+export function syncAsymmetryVisibility(sensitivity) {
+  const row = document.getElementById('max-peak-asymmetry-row');
+  if (row) row.hidden = normalizeShoulderSensitivity(sensitivity) === 0;
+}
+
 export function analysisReady(appState) {
   return !appState.isProfilePending && !appState.isProfileStale;
 }
@@ -21,6 +36,11 @@ export function syncShoulderControl(appState) {
   const label = document.getElementById('shoulder-sensitivity-val');
   if (slider) slider.value = normalizeShoulderSensitivity(appState.shoulderSensitivity);
   if (label) label.textContent = shoulderSensitivityLabel(appState.shoulderSensitivity);
+  const asymmetrySlider = document.getElementById('max-peak-asymmetry');
+  const asymmetryLabel = document.getElementById('max-peak-asymmetry-val');
+  if (asymmetrySlider) asymmetrySlider.value = normalizeMaxPeakAsymmetry(appState.maxPeakAsymmetry);
+  if (asymmetryLabel) asymmetryLabel.textContent = maxPeakAsymmetryLabel(appState.maxPeakAsymmetry);
+  syncAsymmetryVisibility(appState.shoulderSensitivity);
 }
 
 export function isFittedPeak(peak) {

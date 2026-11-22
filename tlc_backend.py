@@ -306,12 +306,13 @@ def _fit_shoulder_group(
     base_rb: int,
     threshold: float,
     sensitivity: float,
+    max_peak_asymmetry: float,
     group_id: str,
     original_peak: dict[str, Any],
     neighbor_intervals: list[tuple[int, int]],
     override: str | None,
 ) -> tuple[dict[str, Any] | None, list[dict[str, Any]] | None]:
-    """Compare one versus two asymmetric peaks around a detected apex.
+    """Compare one versus two shape-limited peaks around a detected apex.
 
     Only a curvature-supported, statistically and materially better two-peak
     fit is allowed to replace the measured single peak. Candidate fits with
@@ -390,10 +391,41 @@ def _fit_shoulder_group(
         return None, None
 
     single_sse = float(np.sum(np.square(y - single_curve)))
-    best: dict[str, Any] | None = None
+    log_ratio_limit = math.log(max_peak_asymmetry)
+
+    def limited_parameters(variables: np.ndarray) -> np.ndarray:
+        """Map bounded width ratios back to the usual two-Gaussian parameters."""
+        parameters = np.empty(11, dtype=float)
+        parameters[:3] = variables[:3]
+        stride = 3 if max_peak_asymmetry == 1 else 4
+        for index in range(2):
+            source = 3 + stride * index
+            target = 3 + 4 * index
+            parameters[target : target + 3] = variables[source : source + 3]
+            left_width = float(variables[source + 2])
+            parameters[target + 3] = (
+                left_width if max_peak_asymmetry == 1 else
+                float(np.clip(left_width * math.exp(float(variables[source + 3])), 1.5, len(y)))
+            )
+        return parameters
+
+    def limited_start(parameters: np.ndarray) -> np.ndarray:
+        start = list(map(float, parameters[:3]))
+        for index in range(2):
+            offset = 3 + 4 * index
+            amplitude, centre, left_width, right_width = map(float, parameters[offset : offset + 4])
+            if max_peak_asymmetry == 1:
+                start.extend((amplitude, centre, math.sqrt(left_width * right_width)))
+            else:
+                start.extend((amplitude, centre, left_width,
+                              float(np.clip(math.log(right_width / left_width),
+                                            -log_ratio_limit * 0.999, log_ratio_limit * 0.999))))
+        return np.asarray(start, dtype=float)
+
+    unrestricted_sse: list[float] = []
+    limited_fits: list[dict[str, Any]] = []
     for candidate in candidates:
-        # The two centres are constrained to opposite sides of the space
-        # between the observed apex and the curvature shoulder candidate.
+        # Each plausible shoulder has its own centre bounds and starting fit.
         if candidate > local_apex:
             main_min, main_max = max(1, local_apex - 8), min(len(y) - 3, candidate - 3)
             second_min, second_max = max(3, local_apex + 3), min(len(y) - 2, candidate + 8)
@@ -416,104 +448,179 @@ def _fit_shoulder_group(
         double_lower = [0, -150, -150, 0, main_min, 1.5, 1.5, 0, second_min, 1.5, 1.5]
         double_upper = [120, 150, 150, 150, main_max, len(y), len(y),
                         150, second_max, len(y), len(y)]
+        unrestricted_fit = None
         try:
-            double_fit = least_squares(
+            attempt = least_squares(
                 lambda params: residuals(params, 2),
                 initial_double, bounds=(double_lower, double_upper), max_nfev=700,
             )
+            if attempt.success:
+                unrestricted_fit = attempt
+                _, unrestricted_curve, _ = _shoulder_model(x, attempt.x, 2)
+                unrestricted_sse.append(float(np.sum(np.square(y - unrestricted_curve))))
         except (ValueError, FloatingPointError):
-            continue
-        if not double_fit.success:
-            continue
-        fitted_baseline, double_curve, component_curves = _shoulder_model(x, double_fit.x, 2)
-        double_sse = float(np.sum(np.square(y - double_curve)))
-        if best is None or double_sse < best["sse"]:
-            best = {
-                "parameters": double_fit.x,
+            pass
+
+        if unrestricted_fit is not None and max_peak_asymmetry > 1 and all(
+            max(unrestricted_fit.x[5 + 4 * index], unrestricted_fit.x[6 + 4 * index]) /
+            min(unrestricted_fit.x[5 + 4 * index], unrestricted_fit.x[6 + 4 * index])
+            <= max_peak_asymmetry
+            for index in range(2)
+        ):
+            fitted_baseline, double_curve, component_curves = _shoulder_model(x, unrestricted_fit.x, 2)
+            limited_fits.append({
+                "parameters": unrestricted_fit.x,
                 "baseline": fitted_baseline,
                 "curve": double_curve,
                 "components": component_curves,
-                "sse": double_sse,
+                "sse": float(np.sum(np.square(y - double_curve))),
                 "candidate": candidate,
-            }
-    if best is None:
-        return None, None
+            })
+            continue
 
-    params = best["parameters"]
-    fitted_baseline = best["baseline"]
-    double_curve = best["curve"]
-    component_curves = best["components"]
-    ordered = sorted(range(2), key=lambda index: params[4 + 4 * index])
-    centres = [float(params[4 + 4 * index] + lb) for index in ordered]
-    widths = [(float(params[5 + 4 * index]), float(params[6 + 4 * index])) for index in ordered]
-    amplitudes = [float(params[3 + 4 * index]) for index in ordered]
-    # The fit uses a wide support, but reported area follows the existing
-    # Width % setting. Integrate the union of the two component intervals:
-    # disjoint windows keep the middle gap out, overlapping windows count it
-    # only once.
-    width_factor = math.sqrt(-2 * math.log(max(threshold, 1e-9)))
-    component_bounds = [
-        (
-            max(lb, int(math.floor(centre - width_factor * width[0]))),
-            min(rb, int(math.ceil(centre + width_factor * width[1]))),
-        )
-        for centre, width in zip(centres, widths)
-    ]
-    merged_bounds: list[list[int]] = []
-    for left, right in sorted(component_bounds):
-        if merged_bounds and left <= merged_bounds[-1][1]:
-            merged_bounds[-1][1] = max(merged_bounds[-1][1], right)
-        else:
-            merged_bounds.append([left, right])
-    if any(right - left < 2 for left, right in merged_bounds) or any(
-        left <= neighbor_right and neighbor_left <= right
-        for left, right in merged_bounds
-        for neighbor_left, neighbor_right in neighbor_intervals
-    ):
+        limited_lower = [0, -150, -150]
+        limited_upper = [120, 150, 150]
+        for centre_min, centre_max in ((main_min, main_max), (second_min, second_max)):
+            limited_lower.extend((0, centre_min, 1.5))
+            limited_upper.extend((150, centre_max, len(y)))
+            if max_peak_asymmetry > 1:
+                limited_lower.append(-log_ratio_limit)
+                limited_upper.append(log_ratio_limit)
+        def limited_residuals(variables: np.ndarray) -> np.ndarray:
+            return residuals(limited_parameters(variables), 2)
+        starts = [limited_start(initial_double)]
+        if unrestricted_fit is not None:
+            alternative_start = limited_start(unrestricted_fit.x)
+            if not np.allclose(alternative_start, starts[0], rtol=1e-8, atol=1e-8):
+                starts.append(alternative_start)
+        starts.sort(key=lambda value: float(np.sum(np.square(limited_residuals(value)))))
+        for initial_limited in starts:
+            try:
+                limited_fit = least_squares(
+                    limited_residuals, initial_limited,
+                    bounds=(limited_lower, limited_upper), max_nfev=500,
+                )
+            except (ValueError, FloatingPointError):
+                continue
+            if not limited_fit.success:
+                continue
+            limited_params = limited_parameters(limited_fit.x)
+            fitted_baseline, double_curve, component_curves = _shoulder_model(x, limited_params, 2)
+            limited_sse = float(np.sum(np.square(y - double_curve)))
+            limited_fits.append({
+                "parameters": limited_params,
+                "baseline": fitted_baseline,
+                "curve": double_curve,
+                "components": component_curves,
+                "sse": limited_sse,
+                "candidate": candidate,
+            })
+    if not limited_fits:
         return None, None
-    integration_lb, integration_rb = merged_bounds[0][0], merged_bounds[-1][1]
-    segments = [
-        {"lb": left, "rb": right, "area": round(calculate_peak_area(signal, left, right), 4)}
-        for left, right in merged_bounds
-    ]
-    fit_areas = [
-        sum(float(_trapz(component[left - lb : right - lb + 1])) for left, right in merged_bounds)
-        for component in component_curves
-    ]
-    total_fit_area = sum(fit_areas)
-    measured_area = round(sum(segment["area"] for segment in segments), 4)
-    if total_fit_area <= 0 or measured_area <= 0:
-        return None, None
-    shares = [fit_areas[index] / total_fit_area for index in ordered]
-    allocated_areas = [round(measured_area * shares[0], 4), 0.0]
-    allocated_areas[1] = round(measured_area - allocated_areas[0], 4)
-    separation = centres[1] - centres[0]
-    rmse_single = math.sqrt(single_sse / len(y))
-    rmse_double = math.sqrt(best["sse"] / len(y))
-    improvement = 1 - rmse_double / max(rmse_single, 1e-9)
+    # A constrained attempt may converge to a better local minimum than the
+    # unrestricted attempt from another start; it is also a valid reference fit.
+    reference_sse = min([*unrestricted_sse, *(fit["sse"] for fit in limited_fits)])
+
     def aicc(sse: float, count: int) -> float:
         n = len(y)
         return n * math.log(max(sse / n, 1e-12)) + 2 * count + 2 * count * (count + 1) / max(1, n - count - 1)
-    aicc_delta = aicc(single_sse, 7) - aicc(best["sse"], 11)
-    secondary_share = min(shares)
-    secondary_snr = min(amplitudes) / max(noise, 1e-9)
-    secondary_raw_height = min(amplitudes) * raw_contrast / 100.0
-    minimum_share = 0.12 - 0.00065 * sensitivity
-    minimum_improvement = 0.30 - 0.0015 * sensitivity
-    checks = {
-        "component_share": secondary_share >= minimum_share,
-        "signal_to_noise": secondary_snr >= 6.0 - 0.02 * sensitivity,
-        "raw_signal": secondary_raw_height >= 5.0,
-        # A fit that merely divides one skewed apex into two nearby shapes is
-        # not an independently resolved shoulder.
-        "separation": separation >= max(6.0, 0.8 * max(max(pair) for pair in widths)),
-        "component_width": max(max(pair) for pair in widths) <= (rb - lb) * 0.60,
-        "rmse_improvement": improvement >= minimum_improvement,
-        "model_selection": aicc_delta >= 12.0,
-        "centres_within_fit": all(lb + 2 < centre < rb - 2 for centre in centres),
-        "baseline": all(-2.0 <= value <= 105.0 for value in fitted_baseline),
-    }
-    fit_valid = all(checks.values())
+
+    def evaluate_fit(fit: dict[str, Any]) -> dict[str, Any] | None:
+        params = fit["parameters"]
+        fitted_baseline = fit["baseline"]
+        component_curves = fit["components"]
+        ordered = sorted(range(2), key=lambda index: params[4 + 4 * index])
+        centres = [float(params[4 + 4 * index] + lb) for index in ordered]
+        widths = [(float(params[5 + 4 * index]), float(params[6 + 4 * index])) for index in ordered]
+        amplitudes = [float(params[3 + 4 * index]) for index in ordered]
+        ratios = [max(pair) / min(pair) for pair in widths]
+        # Width % controls the measured-area union, independently of fit support.
+        width_factor = math.sqrt(-2 * math.log(max(threshold, 1e-9)))
+        component_bounds = [
+            (max(lb, int(math.floor(centre - width_factor * width[0]))),
+             min(rb, int(math.ceil(centre + width_factor * width[1]))))
+            for centre, width in zip(centres, widths)
+        ]
+        merged_bounds: list[list[int]] = []
+        for left, right in sorted(component_bounds):
+            if merged_bounds and left <= merged_bounds[-1][1]:
+                merged_bounds[-1][1] = max(merged_bounds[-1][1], right)
+            else:
+                merged_bounds.append([left, right])
+        if any(right - left < 2 for left, right in merged_bounds) or any(
+            left <= neighbor_right and neighbor_left <= right
+            for left, right in merged_bounds
+            for neighbor_left, neighbor_right in neighbor_intervals
+        ):
+            return None
+        integration_lb, integration_rb = merged_bounds[0][0], merged_bounds[-1][1]
+        segments = [
+            {"lb": left, "rb": right, "area": round(calculate_peak_area(signal, left, right), 4)}
+            for left, right in merged_bounds
+        ]
+        fit_areas = [
+            sum(float(_trapz(component[left - lb : right - lb + 1])) for left, right in merged_bounds)
+            for component in component_curves
+        ]
+        total_fit_area = sum(fit_areas)
+        measured_area = round(sum(segment["area"] for segment in segments), 4)
+        if total_fit_area <= 0 or measured_area <= 0:
+            return None
+        shares = [fit_areas[index] / total_fit_area for index in ordered]
+        allocated_areas = [round(measured_area * shares[0], 4), 0.0]
+        allocated_areas[1] = round(measured_area - allocated_areas[0], 4)
+        separation = centres[1] - centres[0]
+        rmse_single = math.sqrt(single_sse / len(y))
+        rmse_double = math.sqrt(fit["sse"] / len(y))
+        improvement = 1 - rmse_double / max(rmse_single, 1e-9)
+        aicc_delta = aicc(single_sse, 7) - aicc(fit["sse"], 9 if max_peak_asymmetry == 1 else 11)
+        secondary_share = min(shares)
+        secondary_snr = min(amplitudes) / max(noise, 1e-9)
+        secondary_raw_height = min(amplitudes) * raw_contrast / 100.0
+        checks = {
+            "fit_quality_vs_unrestricted": fit["sse"] <= reference_sse * 1.05 + 1e-9,
+            "component_share": secondary_share >= 0.12 - 0.00065 * sensitivity,
+            "signal_to_noise": secondary_snr >= 6.0 - 0.02 * sensitivity,
+            "raw_signal": secondary_raw_height >= 5.0,
+            "separation": separation >= max(6.0, 0.8 * max(max(pair) for pair in widths)),
+            "component_width": max(max(pair) for pair in widths) <= (rb - lb) * 0.60,
+            "rmse_improvement": improvement >= 0.30 - 0.0015 * sensitivity,
+            "model_selection": aicc_delta >= 12.0,
+            "centres_within_fit": all(lb + 2 < centre < rb - 2 for centre in centres),
+            "baseline": all(-2.0 <= value <= 105.0 for value in fitted_baseline),
+        }
+        return {**fit, "ordered": ordered, "centres": centres, "widths": widths,
+                "component_bounds": component_bounds, "integration_lb": integration_lb,
+                "integration_rb": integration_rb, "segments": segments, "fit_areas": fit_areas,
+                "measured_area": measured_area, "allocated_areas": allocated_areas,
+                "rmse_single": rmse_single, "rmse_double": rmse_double, "improvement": improvement,
+                "aicc_delta": aicc_delta, "separation": separation, "secondary_share": secondary_share,
+                "secondary_snr": secondary_snr, "secondary_raw_height": secondary_raw_height,
+                "ratios": ratios, "checks": checks, "fit_valid": all(checks.values())}
+
+    evaluated = [result for fit in limited_fits if (result := evaluate_fit(fit)) is not None]
+    if not evaluated:
+        return None, None
+    valid = [fit for fit in evaluated if fit["fit_valid"]]
+    best = min(valid if valid else evaluated, key=lambda fit: fit["sse"])
+    fitted_baseline = best["baseline"]
+    double_curve = best["curve"]
+    component_curves = best["components"]
+    ordered = best["ordered"]
+    centres = best["centres"]
+    component_bounds = best["component_bounds"]
+    integration_lb, integration_rb = best["integration_lb"], best["integration_rb"]
+    segments = best["segments"]
+    fit_areas = best["fit_areas"]
+    measured_area = best["measured_area"]
+    allocated_areas = best["allocated_areas"]
+    rmse_single, rmse_double = best["rmse_single"], best["rmse_double"]
+    improvement, aicc_delta = best["improvement"], best["aicc_delta"]
+    separation = best["separation"]
+    secondary_share, secondary_snr = best["secondary_share"], best["secondary_snr"]
+    secondary_raw_height = best["secondary_raw_height"]
+    checks = best["checks"]
+    fit_valid = best["fit_valid"]
     reason = "accepted" if fit_valid else next(name for name, passed in checks.items() if not passed)
     decision = "split" if fit_valid and override != "keep" else "keep"
     group: dict[str, Any] = {
@@ -532,6 +639,12 @@ def _fit_shoulder_group(
         "original_peak": dict(original_peak),
         "quality": {
             "noise": round(noise, 4),
+            "max_peak_asymmetry": round(max_peak_asymmetry, 4),
+            "component_asymmetry": [round(ratio, 4) for ratio in best["ratios"]],
+            "max_fitted_asymmetry": round(max(best["ratios"]), 4),
+            "sse_unrestricted": round(reference_sse, 6),
+            "sse_constrained": round(best["sse"], 6),
+            "fit_loss_pct": round(100 * max(0.0, best["sse"] - reference_sse) / max(reference_sse, 1e-9), 3),
             "rmse_single": round(rmse_single, 4),
             "rmse_double": round(rmse_double, 4),
             "improvement": round(improvement, 4),
@@ -663,6 +776,7 @@ def generate_profiles(data: dict[str, Any]) -> dict[str, Any]:
         smooth_sigma = _finite_number(data.get("smooth_sigma", 1.5), "smoothing", 0, 100)
         threshold = _finite_number(data.get("peak_threshold", 50), "peak threshold", 0, 100) / 100.0
         shoulder_sensitivity = _finite_number(data.get("shoulder_sensitivity", 0), "shoulder sensitivity", 0, 100)
+        max_peak_asymmetry = _finite_number(data.get("max_peak_asymmetry", 1), "maximum peak asymmetry", 1, 5)
         fit_overrides = data.get("fit_overrides", {})
         if not isinstance(fit_overrides, dict) or len(fit_overrides) > MAX_LANES * 32:
             raise InputValidationError("Fit overrides must be a small object.")
@@ -767,6 +881,7 @@ def generate_profiles(data: dict[str, Any]) -> dict[str, Any]:
                             *peak_bases[peak_index],
                             threshold,
                             shoulder_sensitivity,
+                            max_peak_asymmetry,
                             group_id,
                             original_peak,
                             other_intervals,

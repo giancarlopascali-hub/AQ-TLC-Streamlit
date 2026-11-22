@@ -134,6 +134,9 @@ export const state = {
   /** 0 disables shoulder fitting; 1..100 requests progressively more sensitive candidates. */
   shoulderSensitivity: 0,
 
+  /** Maximum permitted fitted left/right width ratio for each shoulder component. */
+  maxPeakAsymmetry: 1,
+
   /** User choices for stable backend fit-group IDs. */
   fitOverrides: {},
 

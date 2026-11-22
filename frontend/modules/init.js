@@ -25,8 +25,10 @@ import {
 } from './constants.js';
 import { stReady, stSetHeight } from './streamlit_bridge.js';
 import { wavelengthWindowToRgb } from './image_filters.js';
-import { DEFAULT_SHOULDER_SENSITIVITY, normalizeShoulderSensitivity,
-         shoulderSensitivityLabel } from './shoulder.js';
+import { DEFAULT_SHOULDER_SENSITIVITY, DEFAULT_MAX_PEAK_ASYMMETRY,
+         normalizeShoulderSensitivity, shoulderSensitivityLabel,
+         normalizeMaxPeakAsymmetry, maxPeakAsymmetryLabel,
+         syncAsymmetryVisibility, syncShoulderControl } from './shoulder.js';
 
 /**
  * Initializes DOM event listeners, configures tool selection, attaches window
@@ -274,17 +276,35 @@ export function init() {
     $('shoulder-sensitivity-val').textContent = shoulderSensitivityLabel(shoulderSlider.value);
     shoulderSlider.oninput = e => {
       $('shoulder-sensitivity-val').textContent = shoulderSensitivityLabel(e.target.value);
+      syncAsymmetryVisibility(e.target.value);
     };
     shoulderSlider.onchange = e => {
       const next = normalizeShoulderSensitivity(e.target.value);
       if (next === state.shoulderSensitivity) return;
       saveState();
       state.shoulderSensitivity = next;
+      syncAsymmetryVisibility(next);
       if (state.lanes.length) {
         updateDensitograms(true);
       }
     };
   }
+  const asymmetrySlider = $('max-peak-asymmetry');
+  if (asymmetrySlider) {
+    asymmetrySlider.value = normalizeMaxPeakAsymmetry(state.maxPeakAsymmetry);
+    $('max-peak-asymmetry-val').textContent = maxPeakAsymmetryLabel(asymmetrySlider.value);
+    asymmetrySlider.oninput = e => {
+      $('max-peak-asymmetry-val').textContent = maxPeakAsymmetryLabel(e.target.value);
+    };
+    asymmetrySlider.onchange = e => {
+      const next = normalizeMaxPeakAsymmetry(e.target.value);
+      if (next === state.maxPeakAsymmetry) return;
+      saveState();
+      state.maxPeakAsymmetry = next;
+      if (state.lanes.length) updateDensitograms(true);
+    };
+  }
+  syncShoulderControl(state);
 
   // -- Tool Selection Grid -----------------------------------------------------
   document.querySelectorAll('.tool-btn').forEach(btn => {
@@ -307,9 +327,9 @@ export function init() {
     $('peak-threshold').value = DEFAULT_PEAK_THRESHOLD;
     $('peak-threshold-val').textContent = DEFAULT_PEAK_THRESHOLD;
     state.shoulderSensitivity = DEFAULT_SHOULDER_SENSITIVITY;
+    state.maxPeakAsymmetry = DEFAULT_MAX_PEAK_ASYMMETRY;
     state.fitOverrides = {};
-    if (shoulderSlider) shoulderSlider.value = DEFAULT_SHOULDER_SENSITIVITY;
-    $('shoulder-sensitivity-val').textContent = shoulderSensitivityLabel(DEFAULT_SHOULDER_SENSITIVITY);
+    syncShoulderControl(state);
     if (state.activeLane) updateDensitograms(true);
   };
 

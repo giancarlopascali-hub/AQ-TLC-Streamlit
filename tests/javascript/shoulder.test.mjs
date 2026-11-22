@@ -8,9 +8,12 @@ import {
   fitIntegrationSegments,
   invalidateKeptFitGroup,
   isInsideActiveFit,
+  maxPeakAsymmetryLabel,
+  normalizeMaxPeakAsymmetry,
   normalizeShoulderSensitivity,
   overlapsActiveFit,
   shoulderSensitivityLabel,
+  syncShoulderControl,
   tagKeptFitPeaks,
 } from '../../frontend/modules/shoulder.js';
 
@@ -34,7 +37,8 @@ function fixture(decision = 'split') {
     integration_segments: [{ lb: 3, rb: 4, area: 8 }, { lb: 6, rb: 7, area: 12 }],
     original_peak: ordinary, split_peaks: split,
     measured_cluster_area: 20, width_threshold: 50,
-    quality: { noise: 1, rmse_single: 5, rmse_double: 2, improvement: 0.6, separation: 2 },
+    quality: { noise: 1, rmse_single: 5, rmse_double: 2, improvement: 0.6, separation: 2,
+      max_fitted_asymmetry: 1.2, max_peak_asymmetry: 1.5, fit_loss_pct: 2.2 },
     baseline_curve: [1, 1, 1, 1, 1],
     double_curve: [2, 4, 6, 4, 2],
     components: [
@@ -54,6 +58,29 @@ test('Off is the default and sensitivity is bounded', () => {
   assert.equal(normalizeShoulderSensitivity(-5), 0);
   assert.equal(shoulderSensitivityLabel(0), 'Off');
   assert.equal(normalizeShoulderSensitivity(150), 100);
+});
+
+test('maximum asymmetry is bounded and shown only with shoulder fitting enabled', () => {
+  assert.equal(normalizeMaxPeakAsymmetry(undefined), 1);
+  assert.equal(normalizeMaxPeakAsymmetry(1.26), 1.3);
+  assert.equal(normalizeMaxPeakAsymmetry(10), 5);
+  assert.equal(maxPeakAsymmetryLabel(1), '1.0');
+  const elements = Object.fromEntries([
+    'shoulder-sensitivity', 'shoulder-sensitivity-val',
+    'max-peak-asymmetry', 'max-peak-asymmetry-val', 'max-peak-asymmetry-row',
+  ].map(id => [id, { value: '', textContent: '', hidden: true }]));
+  const originalGetElementById = document.getElementById;
+  document.getElementById = id => elements[id] || null;
+  try {
+    syncShoulderControl({ shoulderSensitivity: 0, maxPeakAsymmetry: 1 });
+    assert.equal(elements['max-peak-asymmetry-row'].hidden, true);
+    syncShoulderControl({ shoulderSensitivity: 60, maxPeakAsymmetry: 2.4 });
+    assert.equal(elements['max-peak-asymmetry-row'].hidden, false);
+    assert.equal(elements['max-peak-asymmetry'].value, 2.4);
+    assert.equal(elements['max-peak-asymmetry-val'].textContent, '2.4');
+  } finally {
+    document.getElementById = originalGetElementById;
+  }
 });
 
 test('fit overlays align to the measured profile and add the baseline to each component', () => {
@@ -135,6 +162,8 @@ test('fit provenance and cluster diagnostics appear in table and report summarie
   assert.match(summary, /Measured cluster 20\.0 AU \(2 Width 50% component windows\)/);
   assert.match(summary, /Allocated sum 20\.0 AU/);
   assert.match(summary, /RMSE 5\.00 → 2\.00 AU/);
+  assert.match(summary, /Max fitted asymmetry R 1\.2 \(limit 1\.5\)/);
+  assert.match(summary, /Squared error with R limit \+2\.2%/);
   assert.doesNotMatch(summary, /data-action="fit-decision"/);
 });
 

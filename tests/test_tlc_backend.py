@@ -175,7 +175,7 @@ def _shoulder_payload(signal: np.ndarray) -> dict:
     }
 
 
-def _direct_shoulder_fit(raw: np.ndarray, sensitivity: float = 80):
+def _direct_shoulder_fit(raw: np.ndarray, sensitivity: float = 80, max_peak_asymmetry: float = 5):
     signal = (raw - raw.min()) / (raw.max() - raw.min()) * 100
     indices, properties = find_peaks(signal, prominence=41, distance=8)
     assert len(indices) == 1
@@ -191,7 +191,7 @@ def _direct_shoulder_fit(raw: np.ndarray, sensitivity: float = 80):
         "area_rb": right,
     }
     return tlc_backend._fit_shoulder_group(
-        signal, raw, apex, base_lb, base_rb, 0.5, sensitivity,
+        signal, raw, apex, base_lb, base_rb, 0.5, sensitivity, max_peak_asymmetry,
         f"1:{apex}", ordinary, [], None,
     )
 
@@ -206,7 +206,7 @@ def test_shoulder_fit_resolves_hidden_peak_and_conserves_width_controlled_area()
     assert len(ordinary["peaks"]) == 1
     assert ordinary["fit_groups"] == []
 
-    lane = tlc_backend.generate_profiles({**payload, "shoulder_sensitivity": 80})["results"][0]
+    lane = tlc_backend.generate_profiles({**payload, "shoulder_sensitivity": 80, "max_peak_asymmetry": 5})["results"][0]
     assert len(lane["peaks"]) == 2
     group = lane["fit_groups"][0]
     assert (group["status"], group["recommendation"], group["decision"], group["active"]) == (
@@ -235,11 +235,11 @@ def test_shoulder_fit_resolves_hidden_peak_and_conserves_width_controlled_area()
     for peak in lane["peaks"]:
         assert peak["height_display"] == pytest.approx(lane["profile_display"][peak["idx"]], abs=0.01)
 
-    wide = tlc_backend.generate_profiles({**payload, "shoulder_sensitivity": 80, "peak_threshold": 20})["results"][0]
-    narrow = tlc_backend.generate_profiles({**payload, "shoulder_sensitivity": 80, "peak_threshold": 80})["results"][0]
+    wide = tlc_backend.generate_profiles({**payload, "shoulder_sensitivity": 80, "max_peak_asymmetry": 5, "peak_threshold": 20})["results"][0]
+    narrow = tlc_backend.generate_profiles({**payload, "shoulder_sensitivity": 80, "max_peak_asymmetry": 5, "peak_threshold": 80})["results"][0]
     assert wide["fit_groups"][0]["measured_cluster_area"] > narrow["fit_groups"][0]["measured_cluster_area"]
     assert len(narrow["fit_groups"][0]["integration_segments"]) == 2
-    very_narrow = tlc_backend.generate_profiles({**payload, "shoulder_sensitivity": 80, "peak_threshold": 95})["results"][0]
+    very_narrow = tlc_backend.generate_profiles({**payload, "shoulder_sensitivity": 80, "max_peak_asymmetry": 5, "peak_threshold": 95})["results"][0]
     narrow_group = very_narrow["fit_groups"][0]
     assert len(narrow_group["integration_segments"]) == 2
     outer = narrow_group["integration_bounds"]
@@ -248,14 +248,55 @@ def test_shoulder_fit_resolves_hidden_peak_and_conserves_width_controlled_area()
     )  # the gap is not counted merely because it lies between components
 
 
+def test_peak_asymmetry_limit_prefers_a_close_fit_and_keeps_a_poor_one_unresolved() -> None:
+    x = np.arange(240, dtype=float)
+    raw = 80 * np.exp(-0.5 * ((x - 100) / 12) ** 2) + 35 * np.exp(-0.5 * ((x - 132) / 12) ** 2)
+
+    # An undistorted symmetric doublet remains resolvable at the strict default.
+    direct_group, direct_peaks = _direct_shoulder_fit(raw, max_peak_asymmetry=1)
+    assert direct_peaks is not None and len(direct_peaks) == 2
+    assert direct_group["quality"]["max_fitted_asymmetry"] == pytest.approx(1)
+
+    # Image extraction changes this profile enough that exact symmetry is a
+    # materially worse explanation; it must not be forced into a split.
+    payload = _shoulder_payload(raw)
+    strict = tlc_backend.generate_profiles({**payload, "shoulder_sensitivity": 80})["results"][0]
+    strict_group = strict["fit_groups"][0]
+    assert len(strict["peaks"]) == 1
+    assert strict_group["status"] == "unresolved"
+    assert strict_group["quality"]["max_peak_asymmetry"] == 1
+    assert strict_group["quality"]["max_fitted_asymmetry"] == pytest.approx(1)
+    assert strict_group["quality"]["fit_loss_pct"] > 5
+
+    relaxed = tlc_backend.generate_profiles({
+        **payload, "shoulder_sensitivity": 80, "max_peak_asymmetry": 1.5,
+    })["results"][0]
+    relaxed_group = relaxed["fit_groups"][0]
+    assert len(relaxed["peaks"]) == 2
+    assert relaxed_group["status"] == "resolved"
+    assert relaxed_group["quality"]["max_fitted_asymmetry"] <= 1.5
+    assert relaxed_group["quality"]["fit_loss_pct"] <= 5
+    assert sum(peak["area"] for peak in relaxed["peaks"]) == pytest.approx(
+        relaxed_group["measured_cluster_area"], abs=1e-4,
+    )
+
+
+def test_peak_asymmetry_range_is_validated() -> None:
+    payload = {"image": _image_data_url(), "lanes": []}
+    for ratio in (0.9, 5.1, float("nan")):
+        result = tlc_backend.generate_profiles({**payload, "max_peak_asymmetry": ratio})
+        assert result["error_code"] == "INVALID_INPUT"
+
+
 def test_shoulder_keep_override_preserves_original_peak_and_offers_local_split() -> None:
     x = np.arange(240, dtype=float)
     raw = 80 * np.exp(-0.5 * ((x - 100) / 12) ** 2) + 35 * np.exp(-0.5 * ((x - 132) / 12) ** 2)
     payload = _shoulder_payload(raw)
-    split = tlc_backend.generate_profiles({**payload, "shoulder_sensitivity": 80})["results"][0]
+    split = tlc_backend.generate_profiles({**payload, "shoulder_sensitivity": 80, "max_peak_asymmetry": 5})["results"][0]
     group_id = split["fit_groups"][0]["id"]
     kept = tlc_backend.generate_profiles({
-        **payload, "shoulder_sensitivity": 80, "fit_overrides": {group_id: "keep"},
+        **payload, "shoulder_sensitivity": 80, "max_peak_asymmetry": 5,
+        "fit_overrides": {group_id: "keep"},
     })["results"][0]
     assert len(kept["peaks"]) == 1
     group = kept["fit_groups"][0]
@@ -301,7 +342,7 @@ def test_blank_or_remote_noise_cannot_become_a_shoulder() -> None:
     apex = 170
     ordinary = {"idx": apex, "height_display": float(remote[apex]), "area": 1, "area_lb": 160, "area_rb": 180}
     group, replacement = tlc_backend._fit_shoulder_group(
-        analysis, remote, apex, 155, 185, 0.5, 100, "1:170", ordinary, [], None,
+        analysis, remote, apex, 155, 185, 0.5, 100, 1.0, "1:170", ordinary, [], None,
     )
     assert group is None and replacement is None
 

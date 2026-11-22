@@ -237,7 +237,13 @@ export function buildFitGroupsHTML(lane, isExport = false) {
       `ΔAICc ${metric(quality.aicc_delta, 1)}`,
       `Weaker share ${Number.isFinite(quality.component_share) ? metric(quality.component_share * 100, 1) + '%' : '—'}`,
       `S/N ${metric(quality.snr, 1)}`,
-    ].join(' · ');
+      Number.isFinite(quality.max_fitted_asymmetry)
+        ? `Max fitted asymmetry R ${metric(quality.max_fitted_asymmetry, 1)} (limit ${metric(quality.max_peak_asymmetry ?? state.maxPeakAsymmetry, 1)})`
+        : null,
+      Number.isFinite(quality.fit_loss_pct)
+        ? `Squared error with R limit +${metric(quality.fit_loss_pct, 1)}%`
+        : null,
+    ].filter(Boolean).join(' · ');
     const buttons = isExport ? '' : resolved ? `
       <div class="fit-choice" role="group" aria-label="Shoulder decision near Rf ${rf}">
         <button type="button" data-action="fit-decision" data-group-id="${escapeHtml(group.id)}" ${state.isProfilePending ? 'disabled' : ''}
@@ -254,14 +260,14 @@ export function buildFitGroupsHTML(lane, isExport = false) {
       <div class="fit-card-head"><strong>Shoulder near Rf ${rf}</strong><span>${status}</span></div>
       ${buttons}
       <div class="fit-diagnostics">${escapeHtml(details)}</div>
-      ${group.reason && group.reason !== 'accepted' ? `<div class="fit-reason">${escapeHtml(group.reason)}</div>` : ''}
+      ${group.reason && group.reason !== 'accepted' ? `<div class="fit-reason">${escapeHtml(group.reason === 'fit_quality_vs_unrestricted' ? 'Asymmetry limit worsens the fit to the measured profile too much.' : group.reason)}</div>` : ''}
     </div>`;
   }).join('');
   const legend = groups.some(group => group.status === 'resolved')
     ? '<div class="fit-legend"><span class="measured">Measured</span><span class="total">Fit total</span><span class="component">Fitted components</span></div>'
     : '';
   return `<div class="fit-groups">${legend}${cards}
-    <p class="fit-provenance">Fitted components are read-only. Use Keep single to edit the ordinary peak, or adjust shoulder sensitivity to refit.</p>
+    <p class="fit-provenance">Fitted components are read-only. Use Keep single to edit the ordinary peak, or adjust shoulder sensitivity or maximum peak asymmetry to refit.</p>
   </div>`;
 }
 

@@ -247,6 +247,16 @@
                 Off keeps ordinary peak detection. Higher values look for overlapping shoulders; review each suggested split.
               </div>
             </div>
+            <div class="slider-row" id="max-peak-asymmetry-row" hidden style="margin-top:7px">
+              <div class="slider-header" style="font-size:0.7rem">
+                <label for="max-peak-asymmetry">Maximum peak asymmetry (R)</label><span id="max-peak-asymmetry-val">1.0</span>
+              </div>
+              <input type="range" id="max-peak-asymmetry" min="1" max="5" step="0.1" value="1"
+                     aria-describedby="max-peak-asymmetry-help" style="height:12px">
+              <div id="max-peak-asymmetry-help" style="font-size:0.62rem;color:var(--text-dim);line-height:1.35;margin-top:3px">
+                R is the wider side divided by the narrower side of each fitted peak. 1.0 requires symmetry; 5.0 allows up to a fivefold difference. A split is kept only if its squared error rises by no more than 5%.
+              </div>
+            </div>
             <button class="action-btn secondary small" id="btn-restore-defaults"
                     style="margin-top:8px;font-size:0.65rem;padding:3px;width:100%">&#8634; Restore Defaults</button>
           </div>

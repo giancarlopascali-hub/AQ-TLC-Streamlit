@@ -22,7 +22,7 @@ import { state, $     } from './state.js';
 import { SMOOTH_SIGMA } from './constants.js';
 import { calculatePeakArea } from './analysis.js';
 import { stSend, stOnRender } from './streamlit_bridge.js';
-import { normalizeShoulderSensitivity, isFittedPeak, tagKeptFitPeaks } from './shoulder.js';
+import { normalizeShoulderSensitivity, normalizeMaxPeakAsymmetry, isFittedPeak, tagKeptFitPeaks } from './shoulder.js';
 
 // -- Circular-dependency bridge -------------------------------------------------
 let _renderProfiles = null;
@@ -200,6 +200,7 @@ function _sendProfileRequest(detectPeaks) {
       lanes:                state.lanes.map(({ id, cx, cy, w, h, angle }) => ({ id, cx, cy, w, h, angle })),
       peak_detection:       detectPeaks,
       shoulder_sensitivity: normalizeShoulderSensitivity(state.shoulderSensitivity),
+      max_peak_asymmetry:   normalizeMaxPeakAsymmetry(state.maxPeakAsymmetry),
       fit_overrides:        { ...state.fitOverrides },
       peak_prominence:      prominence,
       peak_distance:        distance,
