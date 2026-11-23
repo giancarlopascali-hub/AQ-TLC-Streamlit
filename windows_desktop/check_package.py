@@ -63,11 +63,11 @@ def main(url: str) -> None:
     assert b"default_asymmetry" in body and b"max_peak_asymmetry" in body
     status, body = request(port, "GET", "/modules/analysis.js")
     assert status == 200 and body == (REPO_ROOT / "frontend" / "modules" / "analysis.js").read_bytes()
+    assert b"buildAreaCalibrationModel" in body and b"zeroAmountConflict" in body
     for module in ("coords.js", "events.js"):
         status, body = request(port, "GET", f"/modules/{module}")
         assert status == 200 and body == (REPO_ROOT / "frontend" / "modules" / module).read_bytes()
     assert b"hitBoundaryLine" in (REPO_ROOT / "frontend" / "modules" / "events.js").read_bytes()
-    assert b"buildAreaCalibrationModel" in body and b"zeroAmountConflict" in body
     status, body = request(port, "GET", "/modules/profiles.js")
     assert status == 200 and body == (REPO_ROOT / "frontend" / "modules" / "profiles.js").read_bytes()
     assert b"Interpolation from assumed zero point" in body
