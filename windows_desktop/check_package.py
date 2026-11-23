@@ -47,7 +47,7 @@ def main(url: str) -> None:
     status, body = request(port, "GET", "/health")
     assert status == 200 and json.loads(body)["status"] == "ok"
     status, body = request(port, "GET", "/")
-    assert status == 200 and b"AQ-TLC v1.4" in body
+    assert status == 200 and b"AQ-TLC v1.4.1" in body
     assert b'id="shoulder-sensitivity"' in body
     assert b'id="default-asymmetry"' in body
     assert b'id="max-peak-asymmetry"' in body
@@ -63,6 +63,10 @@ def main(url: str) -> None:
     assert b"default_asymmetry" in body and b"max_peak_asymmetry" in body
     status, body = request(port, "GET", "/modules/analysis.js")
     assert status == 200 and body == (REPO_ROOT / "frontend" / "modules" / "analysis.js").read_bytes()
+    for module in ("coords.js", "events.js"):
+        status, body = request(port, "GET", f"/modules/{module}")
+        assert status == 200 and body == (REPO_ROOT / "frontend" / "modules" / module).read_bytes()
+    assert b"hitBoundaryLine" in (REPO_ROOT / "frontend" / "modules" / "events.js").read_bytes()
     assert b"buildAreaCalibrationModel" in body and b"zeroAmountConflict" in body
     status, body = request(port, "GET", "/modules/profiles.js")
     assert status == 200 and body == (REPO_ROOT / "frontend" / "modules" / "profiles.js").read_bytes()
@@ -161,7 +165,7 @@ def main(url: str) -> None:
     status, body = request(port, "POST", "/api", crop)
     data = json.loads(body)
     assert status == 200 and data["ok"] and data["data"]["image"].startswith("data:image/jpeg;base64,"), data
-    print("Packaged app served v1.4 source and completed original and R-limited shoulder fits, area conservation, and crop checks.")
+    print("Packaged app served v1.4.1 source with fixed line hit distance and completed shoulder fits, area conservation, and crop checks.")
 
 
 if __name__ == "__main__":

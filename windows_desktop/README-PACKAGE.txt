@@ -1,4 +1,4 @@
-AQ-TLC Desktop v1.4 for Windows (64-bit)
+AQ-TLC Desktop v1.4.1 for Windows (64-bit)
 
 1. Extract the whole ZIP before running the app.
 2. Keep AQ-TLC-Desktop.exe and the _internal folder together.
@@ -16,6 +16,8 @@ Default asymmetry is checked and uses the original splitting calculation.
 Uncheck it to set Maximum peak asymmetry (R) from 1 to 5 (starting at 1).
 Split and Keep single choices, measured and fitted curves, and model-allocated
 areas appear in the analysis and report views.
+The Lines tool grabs an existing boundary line only within 8 visible pixels,
+including while zoomed in. Starting farther away draws a new line.
 Area Calibration now averages replicate standard areas at the same entered
 amount. It assumes zero area means zero amount, fits a curve through that
 assumed point and the measured standards, and uses the last two standards for
