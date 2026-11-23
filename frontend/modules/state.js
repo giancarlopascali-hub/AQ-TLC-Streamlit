@@ -137,6 +137,9 @@ export const state = {
   /** Maximum permitted fitted left/right width ratio for each shoulder component. */
   maxPeakAsymmetry: 1,
 
+  /** Keep the original unrestricted shoulder fit unless the user opts into an R limit. */
+  defaultAsymmetry: true,
+
   /** User choices for stable backend fit-group IDs. */
   fitOverrides: {},
 

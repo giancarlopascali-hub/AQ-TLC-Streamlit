@@ -175,7 +175,10 @@ def _shoulder_payload(signal: np.ndarray) -> dict:
     }
 
 
-def _direct_shoulder_fit(raw: np.ndarray, sensitivity: float = 80, max_peak_asymmetry: float = 5):
+def _direct_shoulder_fit(
+    raw: np.ndarray, sensitivity: float = 80, max_peak_asymmetry: float = 5,
+    default_asymmetry: bool = True,
+):
     signal = (raw - raw.min()) / (raw.max() - raw.min()) * 100
     indices, properties = find_peaks(signal, prominence=41, distance=8)
     assert len(indices) == 1
@@ -192,7 +195,7 @@ def _direct_shoulder_fit(raw: np.ndarray, sensitivity: float = 80, max_peak_asym
     }
     return tlc_backend._fit_shoulder_group(
         signal, raw, apex, base_lb, base_rb, 0.5, sensitivity, max_peak_asymmetry,
-        f"1:{apex}", ordinary, [], None,
+        f"1:{apex}", ordinary, [], None, default_asymmetry=default_asymmetry,
     )
 
 
@@ -203,10 +206,20 @@ def test_shoulder_fit_resolves_hidden_peak_and_conserves_width_controlled_area()
     ordinary = tlc_backend.generate_profiles(payload)["results"][0]
     disabled = tlc_backend.generate_profiles({**payload, "shoulder_sensitivity": 0})["results"][0]
     assert ordinary == disabled  # zero keeps the pre-feature numerical path
+    disabled_constrained = tlc_backend.generate_profiles({
+        **payload, "shoulder_sensitivity": 0,
+        "default_asymmetry": False, "max_peak_asymmetry": 1,
+    })["results"][0]
+    assert disabled_constrained == ordinary
     assert len(ordinary["peaks"]) == 1
     assert ordinary["fit_groups"] == []
 
-    lane = tlc_backend.generate_profiles({**payload, "shoulder_sensitivity": 80, "max_peak_asymmetry": 5})["results"][0]
+    lane = tlc_backend.generate_profiles({**payload, "shoulder_sensitivity": 80})["results"][0]
+    explicit_default = tlc_backend.generate_profiles({
+        **payload, "shoulder_sensitivity": 80,
+        "default_asymmetry": True, "max_peak_asymmetry": 5,
+    })["results"][0]
+    assert explicit_default == lane  # checked mode ignores the hidden R setting
     assert len(lane["peaks"]) == 2
     group = lane["fit_groups"][0]
     assert (group["status"], group["recommendation"], group["decision"], group["active"]) == (
@@ -215,6 +228,7 @@ def test_shoulder_fit_resolves_hidden_peak_and_conserves_width_controlled_area()
     assert group["area_basis"] == "component_threshold_union"
     assert group["width_threshold"] == 50
     assert [peak["area_method"] for peak in lane["peaks"]] == ["deconvolved", "deconvolved"]
+    assert "max_fitted_asymmetry" not in group["quality"]  # original fit output
     assert [peak["idx"] for peak in lane["peaks"]] == pytest.approx([100, 132], abs=3)
     assert [component["center_idx"] for component in group["components"]] == pytest.approx([100, 132], abs=3)
     assert group["split_peaks"] == lane["peaks"]
@@ -235,11 +249,11 @@ def test_shoulder_fit_resolves_hidden_peak_and_conserves_width_controlled_area()
     for peak in lane["peaks"]:
         assert peak["height_display"] == pytest.approx(lane["profile_display"][peak["idx"]], abs=0.01)
 
-    wide = tlc_backend.generate_profiles({**payload, "shoulder_sensitivity": 80, "max_peak_asymmetry": 5, "peak_threshold": 20})["results"][0]
-    narrow = tlc_backend.generate_profiles({**payload, "shoulder_sensitivity": 80, "max_peak_asymmetry": 5, "peak_threshold": 80})["results"][0]
+    wide = tlc_backend.generate_profiles({**payload, "shoulder_sensitivity": 80, "peak_threshold": 20})["results"][0]
+    narrow = tlc_backend.generate_profiles({**payload, "shoulder_sensitivity": 80, "peak_threshold": 80})["results"][0]
     assert wide["fit_groups"][0]["measured_cluster_area"] > narrow["fit_groups"][0]["measured_cluster_area"]
     assert len(narrow["fit_groups"][0]["integration_segments"]) == 2
-    very_narrow = tlc_backend.generate_profiles({**payload, "shoulder_sensitivity": 80, "max_peak_asymmetry": 5, "peak_threshold": 95})["results"][0]
+    very_narrow = tlc_backend.generate_profiles({**payload, "shoulder_sensitivity": 80, "peak_threshold": 95})["results"][0]
     narrow_group = very_narrow["fit_groups"][0]
     assert len(narrow_group["integration_segments"]) == 2
     outer = narrow_group["integration_bounds"]
@@ -253,14 +267,19 @@ def test_peak_asymmetry_limit_prefers_a_close_fit_and_keeps_a_poor_one_unresolve
     raw = 80 * np.exp(-0.5 * ((x - 100) / 12) ** 2) + 35 * np.exp(-0.5 * ((x - 132) / 12) ** 2)
 
     # An undistorted symmetric doublet remains resolvable at the strict default.
-    direct_group, direct_peaks = _direct_shoulder_fit(raw, max_peak_asymmetry=1)
+    direct_group, direct_peaks = _direct_shoulder_fit(
+        raw, max_peak_asymmetry=1, default_asymmetry=False,
+    )
     assert direct_peaks is not None and len(direct_peaks) == 2
     assert direct_group["quality"]["max_fitted_asymmetry"] == pytest.approx(1)
 
     # Image extraction changes this profile enough that exact symmetry is a
     # materially worse explanation; it must not be forced into a split.
     payload = _shoulder_payload(raw)
-    strict = tlc_backend.generate_profiles({**payload, "shoulder_sensitivity": 80})["results"][0]
+    strict = tlc_backend.generate_profiles({
+        **payload, "shoulder_sensitivity": 80,
+        "default_asymmetry": False, "max_peak_asymmetry": 1,
+    })["results"][0]
     strict_group = strict["fit_groups"][0]
     assert len(strict["peaks"]) == 1
     assert strict_group["status"] == "unresolved"
@@ -269,7 +288,8 @@ def test_peak_asymmetry_limit_prefers_a_close_fit_and_keeps_a_poor_one_unresolve
     assert strict_group["quality"]["fit_loss_pct"] > 5
 
     relaxed = tlc_backend.generate_profiles({
-        **payload, "shoulder_sensitivity": 80, "max_peak_asymmetry": 1.5,
+        **payload, "shoulder_sensitivity": 80,
+        "default_asymmetry": False, "max_peak_asymmetry": 1.5,
     })["results"][0]
     relaxed_group = relaxed["fit_groups"][0]
     assert len(relaxed["peaks"]) == 2
@@ -285,6 +305,9 @@ def test_peak_asymmetry_range_is_validated() -> None:
     payload = {"image": _image_data_url(), "lanes": []}
     for ratio in (0.9, 5.1, float("nan")):
         result = tlc_backend.generate_profiles({**payload, "max_peak_asymmetry": ratio})
+        assert result["error_code"] == "INVALID_INPUT"
+    for invalid in ("false", 0, None):
+        result = tlc_backend.generate_profiles({**payload, "default_asymmetry": invalid})
         assert result["error_code"] == "INVALID_INPUT"
 
 

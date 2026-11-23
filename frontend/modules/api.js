@@ -200,6 +200,7 @@ function _sendProfileRequest(detectPeaks) {
       lanes:                state.lanes.map(({ id, cx, cy, w, h, angle }) => ({ id, cx, cy, w, h, angle })),
       peak_detection:       detectPeaks,
       shoulder_sensitivity: normalizeShoulderSensitivity(state.shoulderSensitivity),
+      default_asymmetry:    state.defaultAsymmetry !== false,
       max_peak_asymmetry:   normalizeMaxPeakAsymmetry(state.maxPeakAsymmetry),
       fit_overrides:        { ...state.fitOverrides },
       peak_prominence:      prominence,

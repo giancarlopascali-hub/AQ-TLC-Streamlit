@@ -1,4 +1,4 @@
-# Rebuild Streamlit Cloud after the shoulder-fitting backend update.
+# Rebuild Streamlit Cloud after the default-asymmetry backend update.
 streamlit==1.66.1
 numpy==2.2.6
 pillow==13.0.0

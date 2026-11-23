@@ -21,7 +21,7 @@ import { renderProfiles   } from './profiles.js';
 import { stSend, stOnRender, stSetHeight } from './streamlit_bridge.js';
 import { cancelPendingProfileRequests, updateDensitograms } from './api.js';
 import { syncLaneWidthControl } from './lane_width.js';
-import { DEFAULT_MAX_PEAK_ASYMMETRY, normalizeMaxPeakAsymmetry, syncShoulderControl } from './shoulder.js';
+import { DEFAULT_ASYMMETRY, DEFAULT_MAX_PEAK_ASYMMETRY, normalizeMaxPeakAsymmetry, syncShoulderControl } from './shoulder.js';
 
 // -- Crop response counter -----------------------------------------------------
 let _cropReqCounter = 0;
@@ -67,6 +67,7 @@ export function saveState() {
     lanes:   JSON.parse(JSON.stringify(state.lanes)),
     laneWidth: state.laneWidth,
     shoulderSensitivity: state.shoulderSensitivity,
+    defaultAsymmetry: state.defaultAsymmetry,
     maxPeakAsymmetry: state.maxPeakAsymmetry,
     fitOverrides: { ...state.fitOverrides },
     peakParameters: {
@@ -101,6 +102,7 @@ export function undo() {
   state.lanes          = snapshot.lanes;
   state.laneWidth      = snapshot.laneWidth ?? (snapshot.lanes[0]?.w ?? null);
   state.shoulderSensitivity = snapshot.shoulderSensitivity ?? 0;
+  state.defaultAsymmetry = snapshot.defaultAsymmetry !== false;
   state.maxPeakAsymmetry = normalizeMaxPeakAsymmetry(snapshot.maxPeakAsymmetry ?? DEFAULT_MAX_PEAK_ASYMMETRY);
   state.fitOverrides = { ...(snapshot.fitOverrides || {}) };
   state.activeLane     = state.lanes.find(lane => lane.id === activeLaneId) || state.lanes[0] || null;
@@ -202,6 +204,7 @@ export function resetState(keepImage = true) {
   state.lanes          = [];
   state.laneWidth      = null;
   state.shoulderSensitivity = 0;
+  state.defaultAsymmetry = DEFAULT_ASYMMETRY;
   state.maxPeakAsymmetry = DEFAULT_MAX_PEAK_ASYMMETRY;
   state.fitOverrides   = {};
   state.spottingMarks  = [];

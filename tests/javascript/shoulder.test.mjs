@@ -60,21 +60,28 @@ test('Off is the default and sensitivity is bounded', () => {
   assert.equal(normalizeShoulderSensitivity(150), 100);
 });
 
-test('maximum asymmetry is bounded and shown only with shoulder fitting enabled', () => {
+test('default asymmetry is checked when shoulders are on and the R slider appears only when unchecked', () => {
   assert.equal(normalizeMaxPeakAsymmetry(undefined), 1);
   assert.equal(normalizeMaxPeakAsymmetry(1.26), 1.3);
   assert.equal(normalizeMaxPeakAsymmetry(10), 5);
   assert.equal(maxPeakAsymmetryLabel(1), '1.0');
   const elements = Object.fromEntries([
     'shoulder-sensitivity', 'shoulder-sensitivity-val',
+    'default-asymmetry', 'default-asymmetry-row',
     'max-peak-asymmetry', 'max-peak-asymmetry-val', 'max-peak-asymmetry-row',
-  ].map(id => [id, { value: '', textContent: '', hidden: true }]));
+  ].map(id => [id, { value: '', textContent: '', hidden: true, checked: false }]));
   const originalGetElementById = document.getElementById;
   document.getElementById = id => elements[id] || null;
   try {
     syncShoulderControl({ shoulderSensitivity: 0, maxPeakAsymmetry: 1 });
+    assert.equal(elements['default-asymmetry-row'].hidden, true);
     assert.equal(elements['max-peak-asymmetry-row'].hidden, true);
-    syncShoulderControl({ shoulderSensitivity: 60, maxPeakAsymmetry: 2.4 });
+    syncShoulderControl({ shoulderSensitivity: 60, defaultAsymmetry: true, maxPeakAsymmetry: 2.4 });
+    assert.equal(elements['default-asymmetry-row'].hidden, false);
+    assert.equal(elements['default-asymmetry'].checked, true);
+    assert.equal(elements['max-peak-asymmetry-row'].hidden, true);
+    syncShoulderControl({ shoulderSensitivity: 60, defaultAsymmetry: false, maxPeakAsymmetry: 2.4 });
+    assert.equal(elements['default-asymmetry'].checked, false);
     assert.equal(elements['max-peak-asymmetry-row'].hidden, false);
     assert.equal(elements['max-peak-asymmetry'].value, 2.4);
     assert.equal(elements['max-peak-asymmetry-val'].textContent, '2.4');
@@ -160,11 +167,23 @@ test('fit provenance and cluster diagnostics appear in table and report summarie
   assert.match(row, /fit 7\.0 AU/);
   const summary = buildFitGroupsHTML(lane, true);
   assert.match(summary, /Measured cluster 20\.0 AU \(2 Width 50% component windows\)/);
+  assert.match(summary, /Shape mode R limit/);
   assert.match(summary, /Allocated sum 20\.0 AU/);
   assert.match(summary, /RMSE 5\.00 → 2\.00 AU/);
   assert.match(summary, /Max fitted asymmetry R 1\.2 \(limit 1\.5\)/);
   assert.match(summary, /Squared error with R limit \+2\.2%/);
   assert.doesNotMatch(summary, /data-action="fit-decision"/);
+});
+
+test('legacy default asymmetry report identifies its mode without R-limit diagnostics', () => {
+  const lane = fixture();
+  delete lane.fit_groups[0].quality.max_peak_asymmetry;
+  delete lane.fit_groups[0].quality.max_fitted_asymmetry;
+  delete lane.fit_groups[0].quality.fit_loss_pct;
+  state.shoulderSensitivity = 50;
+  const summary = buildFitGroupsHTML(lane, true);
+  assert.match(summary, /Shape mode Default asymmetry/);
+  assert.doesNotMatch(summary, /Max fitted asymmetry|Squared error with R limit/);
 });
 
 test('report uses the measured analysis scale whether fitting is on or off', () => {

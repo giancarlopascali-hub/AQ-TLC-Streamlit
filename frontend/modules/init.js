@@ -25,7 +25,7 @@ import {
 } from './constants.js';
 import { stReady, stSetHeight } from './streamlit_bridge.js';
 import { wavelengthWindowToRgb } from './image_filters.js';
-import { DEFAULT_SHOULDER_SENSITIVITY, DEFAULT_MAX_PEAK_ASYMMETRY,
+import { DEFAULT_SHOULDER_SENSITIVITY, DEFAULT_MAX_PEAK_ASYMMETRY, DEFAULT_ASYMMETRY,
          normalizeShoulderSensitivity, shoulderSensitivityLabel,
          normalizeMaxPeakAsymmetry, maxPeakAsymmetryLabel,
          syncAsymmetryVisibility, syncShoulderControl } from './shoulder.js';
@@ -276,17 +276,29 @@ export function init() {
     $('shoulder-sensitivity-val').textContent = shoulderSensitivityLabel(shoulderSlider.value);
     shoulderSlider.oninput = e => {
       $('shoulder-sensitivity-val').textContent = shoulderSensitivityLabel(e.target.value);
-      syncAsymmetryVisibility(e.target.value);
+      syncAsymmetryVisibility(e.target.value, state.defaultAsymmetry);
     };
     shoulderSlider.onchange = e => {
       const next = normalizeShoulderSensitivity(e.target.value);
       if (next === state.shoulderSensitivity) return;
       saveState();
       state.shoulderSensitivity = next;
-      syncAsymmetryVisibility(next);
+      syncAsymmetryVisibility(next, state.defaultAsymmetry);
       if (state.lanes.length) {
         updateDensitograms(true);
       }
+    };
+  }
+  const defaultAsymmetryCheckbox = $('default-asymmetry');
+  if (defaultAsymmetryCheckbox) {
+    defaultAsymmetryCheckbox.checked = state.defaultAsymmetry !== false;
+    defaultAsymmetryCheckbox.onchange = e => {
+      const next = Boolean(e.target.checked);
+      if (next === state.defaultAsymmetry) return;
+      saveState();
+      state.defaultAsymmetry = next;
+      syncAsymmetryVisibility(state.shoulderSensitivity, next);
+      if (state.lanes.length) updateDensitograms(true);
     };
   }
   const asymmetrySlider = $('max-peak-asymmetry');
@@ -327,6 +339,7 @@ export function init() {
     $('peak-threshold').value = DEFAULT_PEAK_THRESHOLD;
     $('peak-threshold-val').textContent = DEFAULT_PEAK_THRESHOLD;
     state.shoulderSensitivity = DEFAULT_SHOULDER_SENSITIVITY;
+    state.defaultAsymmetry = DEFAULT_ASYMMETRY;
     state.maxPeakAsymmetry = DEFAULT_MAX_PEAK_ASYMMETRY;
     state.fitOverrides = {};
     syncShoulderControl(state);

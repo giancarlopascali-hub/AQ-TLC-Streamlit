@@ -228,6 +228,7 @@ export function buildFitGroupsHTML(lane, isExport = false) {
       ? group.components.reduce((sum, component) => sum + (Number(component.area) || 0), 0)
       : NaN;
     const details = [
+      `Shape mode ${Number.isFinite(quality.max_peak_asymmetry) ? 'R limit' : 'Default asymmetry'}`,
       `Measured cluster ${metric(group.measured_cluster_area, 1)} AU (${fitIntegrationSegments(group).length} Width ${metric(group.width_threshold, 0)}% component window${fitIntegrationSegments(group).length === 1 ? '' : 's'})`,
       `Allocated sum ${metric(allocatedSum, 1)} AU`,
       `Noise ${metric(quality.noise)} AU`,
@@ -267,7 +268,7 @@ export function buildFitGroupsHTML(lane, isExport = false) {
     ? '<div class="fit-legend"><span class="measured">Measured</span><span class="total">Fit total</span><span class="component">Fitted components</span></div>'
     : '';
   return `<div class="fit-groups">${legend}${cards}
-    <p class="fit-provenance">Fitted components are read-only. Use Keep single to edit the ordinary peak, or adjust shoulder sensitivity or maximum peak asymmetry to refit.</p>
+    <p class="fit-provenance">Fitted components are read-only. Use Keep single to edit the ordinary peak, or adjust Shoulder sensitivity or Default asymmetry to refit.</p>
   </div>`;
 }
 
