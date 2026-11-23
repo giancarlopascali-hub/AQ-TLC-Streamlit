@@ -1,4 +1,4 @@
-AQ-TLC Desktop v1.3 for Windows (64-bit)
+AQ-TLC Desktop v1.4 for Windows (64-bit)
 
 1. Extract the whole ZIP before running the app.
 2. Keep AQ-TLC-Desktop.exe and the _internal folder together.
@@ -11,9 +11,11 @@ before closing the app. If the browser does not open, use the local address
 printed in the console window.
 
 This Windows package includes the AQ-TLC Desktop analysis backend and interface.
-Shoulder sensitivity can propose overlapping peaks for review. Split and Keep
-single choices, measured and fitted curves, and model-allocated areas appear in
-the analysis and report views.
+Shoulder sensitivity can propose overlapping peaks for review. When it is on,
+Default asymmetry is checked and uses the original splitting calculation.
+Uncheck it to set Maximum peak asymmetry (R) from 1 to 5 (starting at 1).
+Split and Keep single choices, measured and fitted curves, and model-allocated
+areas appear in the analysis and report views.
 Area Calibration now averages replicate standard areas at the same entered
 amount. It assumes zero area means zero amount, fits a curve through that
 assumed point and the measured standards, and uses the last two standards for

@@ -47,8 +47,10 @@ def main(url: str) -> None:
     status, body = request(port, "GET", "/health")
     assert status == 200 and json.loads(body)["status"] == "ok"
     status, body = request(port, "GET", "/")
-    assert status == 200 and b"AQ-TLC v1.3" in body
+    assert status == 200 and b"AQ-TLC v1.4" in body
     assert b'id="shoulder-sensitivity"' in body
+    assert b'id="default-asymmetry"' in body
+    assert b'id="max-peak-asymmetry"' in body
     assert b"fonts.googleapis.com" not in body  # offline staging
     status, body = request(port, "GET", "/modules/streamlit_bridge.js")
     assert status == 200 and b"fetch('/api'" in body
@@ -58,6 +60,7 @@ def main(url: str) -> None:
     assert status == 200 and b"applyFitDecision" in body
     status, body = request(port, "GET", "/modules/api.js")
     assert status == 200 and b"shoulder_sensitivity" in body
+    assert b"default_asymmetry" in body and b"max_peak_asymmetry" in body
     status, body = request(port, "GET", "/modules/analysis.js")
     assert status == 200 and body == (REPO_ROOT / "frontend" / "modules" / "analysis.js").read_bytes()
     assert b"buildAreaCalibrationModel" in body and b"zeroAmountConflict" in body
@@ -108,7 +111,8 @@ def main(url: str) -> None:
 
     on_message = {
         **off_message, "request_id": "smoke-shoulder-on",
-        "payload": {**doublet, "shoulder_sensitivity": 80},
+        "payload": {**doublet, "shoulder_sensitivity": 80,
+                    "default_asymmetry": True, "max_peak_asymmetry": 1},
     }
     status, body = request(port, "POST", "/api", on_message)
     on = json.loads(body)
@@ -118,10 +122,37 @@ def main(url: str) -> None:
     assert all(peak.get("area_method") == "deconvolved" for peak in fitted_lane["peaks"]), fitted_lane
     group = fitted_lane["fit_groups"][0]
     assert group["status"] == "resolved" and group["active"], group
+    assert "max_fitted_asymmetry" not in group["quality"], group
     allocated = sum(peak["area"] for peak in fitted_lane["peaks"])
     measured = group["measured_cluster_area"]
     assert abs(allocated - measured) < 0.001, (allocated, measured)
     assert abs(sum(segment["area"] for segment in group["integration_segments"]) - measured) < 0.001
+
+    strict_message = {
+        **on_message, "request_id": "smoke-shoulder-limited-one",
+        "payload": {**doublet, "shoulder_sensitivity": 80,
+                    "default_asymmetry": False, "max_peak_asymmetry": 1},
+    }
+    status, body = request(port, "POST", "/api", strict_message)
+    strict = json.loads(body)
+    assert status == 200 and strict["ok"], strict
+    strict_lane = strict["data"]["results"][0]
+    assert len(strict_lane["peaks"]) == 1, strict_lane
+    assert strict_lane["fit_groups"][0]["quality"]["max_fitted_asymmetry"] == 1, strict_lane
+
+    relaxed_message = {
+        **strict_message, "request_id": "smoke-shoulder-limited-two",
+        "payload": {**doublet, "shoulder_sensitivity": 80,
+                    "default_asymmetry": False, "max_peak_asymmetry": 2},
+    }
+    status, body = request(port, "POST", "/api", relaxed_message)
+    relaxed = json.loads(body)
+    assert status == 200 and relaxed["ok"], relaxed
+    relaxed_lane = relaxed["data"]["results"][0]
+    assert len(relaxed_lane["peaks"]) == 2, relaxed_lane
+    relaxed_group = relaxed_lane["fit_groups"][0]
+    assert relaxed_group["quality"]["max_fitted_asymmetry"] <= 2, relaxed_group
+    assert abs(sum(peak["area"] for peak in relaxed_lane["peaks"]) - relaxed_group["measured_cluster_area"]) < 0.001
 
     crop = {
         "protocol_version": 1, "action": "crop", "request_id": "smoke-crop",
@@ -130,7 +161,7 @@ def main(url: str) -> None:
     status, body = request(port, "POST", "/api", crop)
     data = json.loads(body)
     assert status == 200 and data["ok"] and data["data"]["image"].startswith("data:image/jpeg;base64,"), data
-    print("Packaged app served v1.3 calibration source and completed profile, shoulder split, area conservation, and crop checks.")
+    print("Packaged app served v1.4 source and completed original and R-limited shoulder fits, area conservation, and crop checks.")
 
 
 if __name__ == "__main__":
