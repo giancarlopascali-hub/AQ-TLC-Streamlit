@@ -117,6 +117,19 @@ export function getImageCanvasPos(x, y, sx, sy) {
   };
 }
 
+/** Hit an existing boundary line using a fixed visible distance at any zoom. */
+export function hitBoundaryLine(p, line, canvas, toleranceCssPx = 8) {
+  const sx = canvas.width / state.imgW;
+  const pos = getImageCanvasPos(line.cx, line.cy, sx, sx);
+  const rect = canvas.getBoundingClientRect();
+  const screenX = state.view.zoom * rect.width / canvas.width;
+  const screenY = state.view.zoom * rect.height / canvas.height;
+  const halfWidthCss = line.w * sx * screenX / 2;
+  const xDistanceCss = Math.abs(p.cx - pos.cx) * screenX;
+  const yDistanceCss = Math.abs(p.cy - pos.cy) * screenY;
+  return yDistanceCss < toleranceCssPx && xDistanceCss <= halfWidthCss + toleranceCssPx;
+}
+
 /**
  * Calculates the snapped image-space position for a spotting mark placement.
  *

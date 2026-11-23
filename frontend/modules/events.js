@@ -7,7 +7,7 @@
  */
 
 import { state, $ } from './state.js';
-import { getPos, getImageCanvasPos, calculateSnappedOriginPosition } from './coords.js';
+import { getPos, getImageCanvasPos, hitBoundaryLine, calculateSnappedOriginPosition } from './coords.js';
 import { render } from './render.js';
 import { renderProfiles } from './profiles.js';
 import { saveState, undo, applyCrop } from './workspace.js';
@@ -76,18 +76,16 @@ export function setupCanvasEvents() {
       state.roiRect = { x: p.x, y: p.y, w: 1, h: 1 };
     } else if (state.activeTool === 'line') {
       const sx = canvas.width / state.imgW;
-      const hit = state.lines.find(l => {
-        const pos = getImageCanvasPos(l.cx, l.cy, sx, sx);
-        const xPad = Math.max(20, (l.w * sx) / 2);
-        return Math.abs(p.cy - pos.cy) < 15 && Math.abs(p.cx - pos.cx) <= xPad;
-      });
+      const hit = state.lines.find(l => hitBoundaryLine(p, l, canvas));
 
       if (hit) {
         saveState();
         state.activeLine = hit;
         const pos = getImageCanvasPos(hit.cx, hit.cy, sx, sx);
-        const distEdge = Math.abs(Math.abs(p.cx - pos.cx) - (hit.w * sx) / 2);
-        state.editingField = distEdge < 20 ? 'resize-line' : 'move-line';
+        const rect = canvas.getBoundingClientRect();
+        const edgeDistanceCss = Math.abs(Math.abs(p.cx - pos.cx) - (hit.w * sx) / 2)
+          * state.view.zoom * rect.width / canvas.width;
+        state.editingField = edgeDistanceCss < 10 ? 'resize-line' : 'move-line';
       } else {
         saveState();
         const nl = { cx: p.x, cy: p.y, w: 1, angle: 0 };
