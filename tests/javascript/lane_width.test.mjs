@@ -50,17 +50,24 @@ test('moving a lane centre changes the common limit', () => {
   assertTenthNear(maxCommonLaneWidth(lanes, 100), 30);
 });
 
-test('rotated lanes respect both the visible and backend-sampled orientations', () => {
+test('rotated lanes use the same footprint for display and profile sampling', () => {
   const angle = Math.PI / 4;
   const lanes = [
     lane(40, 40, { angle }),
     lane(60, 50, { angle }),
   ];
 
-  // The centre offset is (20, 10). In the visible +45-degree frame, its
-  // horizontal component is about 21.2 px; in the backend -45-degree frame,
-  // it is about 7.1 px. Both frames overlap vertically at height 30 px.
-  assertTenthNear(maxCommonLaneWidth(lanes, 100), Math.SQRT1_2 * 10);
+  // The centre offset is (20, 10). Its across-lane component in the +45°
+  // frame is about 21.2 px, and the lanes overlap along their length.
+  assertTenthNear(maxCommonLaneWidth(lanes, 100), 30 * Math.SQRT1_2);
+});
+
+test('a quarter-turned lane uses image height for its width edge limit', () => {
+  const turned = lane(20, 70, { height: 50, angle: Math.PI / 2 });
+  assert.equal(maxCommonLaneWidth([turned], 100, 200), 140);
+  const state = { lanes: [turned], imgW: 100, imgH: 200, laneWidth: 5 };
+  assert.equal(applyCommonLaneWidth(state, 150), true);
+  assert.equal(state.laneWidth, 140);
 });
 
 test('duplicate centres have no feasible common width', () => {

@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import base64
 import io
+import math
 
+import cv2
 import numpy as np
 from PIL import Image
 import pytest
@@ -28,6 +30,68 @@ def _solid_image_data_url(rgb: tuple[int, int, int]) -> str:
     buffer = io.BytesIO()
     Image.new("RGB", (2, 2), color=rgb).save(buffer, format="PNG")
     return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
+def _array_image_data_url(rgb: np.ndarray) -> str:
+    buffer = io.BytesIO()
+    Image.fromarray(rgb, mode="RGB").save(buffer, format="PNG")
+    return "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode("ascii")
+
+
+@pytest.mark.parametrize(
+    ("angle", "rotation", "external_centre"),
+    [
+        (-math.pi / 2, Image.Transpose.ROTATE_270, (29, 50)),
+        (-3 * math.pi / 2, Image.Transpose.ROTATE_90, (30, 49)),
+    ],
+)
+def test_rotated_lane_matches_physically_rotated_plate(angle, rotation, external_centre) -> None:
+    source = np.full((60, 100, 3), 180, dtype=np.uint8)
+    source[25:35, 18:27] = 35
+    source[25:35, 61:70] = 65
+    rotated = np.asarray(Image.fromarray(source, mode="RGB").transpose(rotation))
+    settings = {
+        "peak_detection": True, "peak_prominence": 50, "peak_distance": 4,
+        "peak_threshold": 50, "smooth_sigma": 0, "polarity_mode": "dark",
+    }
+    in_app = tlc_backend.generate_profiles({
+        **settings, "image": _array_image_data_url(source),
+        "lanes": [{"id": 1, "cx": 50, "cy": 30, "w": 10, "h": 80, "angle": angle}],
+    })
+    external = tlc_backend.generate_profiles({
+        **settings, "image": _array_image_data_url(rotated),
+        "lanes": [{"id": 1, "cx": external_centre[0], "cy": external_centre[1],
+                   "w": 10, "h": 80, "angle": 0}],
+    })
+    assert "error" not in in_app
+    assert "error" not in external
+    in_app_lane, external_lane = in_app["results"][0], external["results"][0]
+    assert len(in_app_lane["profile_display"]) == 80
+    assert in_app_lane["profile_display"] == external_lane["profile_display"]
+    assert in_app_lane["profile_analysis"] == external_lane["profile_analysis"]
+    assert [(peak["idx"], peak["rf"]) for peak in in_app_lane["peaks"]] == [
+        (peak["idx"], peak["rf"]) for peak in external_lane["peaks"]
+    ]
+
+
+def test_rotated_lane_clips_at_source_edge_without_wrapping() -> None:
+    image = np.arange(60 * 100, dtype=np.uint8).reshape(60, 100)
+    lane = {"cx": 50, "cy": 0, "w": 10, "h": 80, "angle": -math.pi / 2}
+    roi = tlc_backend._extract_lane_roi(image, lane)
+    physically_rotated = np.asarray(Image.fromarray(image).transpose(Image.Transpose.ROTATE_270))
+    assert roi.shape == (80, 6)
+    assert np.array_equal(roi, physically_rotated[10:90, 54:60])
+
+
+def test_unrotated_lane_retains_original_slice_and_dimension_limits() -> None:
+    image = np.arange(60 * 100, dtype=np.uint8).reshape(60, 100)
+    lane = {"cx": 50, "cy": 30, "w": 10, "h": 40, "angle": 0}
+    assert np.array_equal(tlc_backend._extract_lane_roi(image, lane), image[10:50, 45:55])
+    assert len(tlc_backend._validated_lanes([{**lane, "h": 80, "angle": -math.pi / 2}], 100, 60)) == 1
+    with pytest.raises(tlc_backend.InputValidationError):
+        tlc_backend._validated_lanes([{**lane, "h": 80}], 100, 60)
+    with pytest.raises(tlc_backend.InputValidationError):
+        tlc_backend._validated_lanes([{**lane, "h": 101, "angle": -math.pi / 2}], 100, 60)
 
 
 def _green_band_image_data_url() -> str:
@@ -382,3 +446,42 @@ def test_crop_rejects_empty_region() -> None:
         {"image": _image_data_url(), "x": 1000, "y": 1000, "w": 5, "h": 5, "angle": 0}
     )
     assert result["error_code"] == "INVALID_INPUT"
+
+
+@pytest.mark.parametrize(
+    ("angle", "quarter_turns"),
+    [(0, 0), (math.pi / 2, 3), (math.pi, 2), (3 * math.pi / 2, 1), (-math.pi / 2, 1)],
+)
+def test_crop_rotates_selected_source_pixels_without_clipping(angle, quarter_turns) -> None:
+    source = np.arange(60 * 100 * 3, dtype=np.uint8).reshape(60, 100, 3)
+    image_url = _array_image_data_url(source)
+    result = tlc_backend.crop_image({
+        "image": image_url, "x": 10, "y": 20, "w": 50, "h": 20, "angle": angle,
+    })
+    assert "error" not in result
+    source_bgr = tlc_backend.load_image(image_url)
+    expected = np.ascontiguousarray(np.rot90(source_bgr[20:40, 10:60], k=quarter_turns))
+    encoded, jpeg = cv2.imencode(".jpg", expected, [cv2.IMWRITE_JPEG_QUALITY, 90])
+    assert encoded
+    assert base64.b64decode(result["image"].split(",", 1)[1]) == jpeg.tobytes()
+    actual = tlc_backend.load_image(result["image"])
+    assert actual.shape[:2] == expected.shape[:2]
+
+
+def test_crop_negative_drag_direction_and_arbitrary_rotation_expand_bounds() -> None:
+    source = np.full((60, 100, 3), 180, dtype=np.uint8)
+    source[23:37, 18:52] = (20, 60, 100)
+    image_url = _array_image_data_url(source)
+    normal = tlc_backend.crop_image({
+        "image": image_url, "x": 10, "y": 20, "w": 50, "h": 20, "angle": math.pi / 2,
+    })
+    reversed_drag = tlc_backend.crop_image({
+        "image": image_url, "x": 60, "y": 40, "w": -50, "h": -20, "angle": math.pi / 2,
+    })
+    assert normal["image"] == reversed_drag["image"]
+
+    diagonal = tlc_backend.crop_image({
+        "image": image_url, "x": 10, "y": 20, "w": 50, "h": 20, "angle": math.pi / 4,
+    })
+    assert "error" not in diagonal
+    assert tlc_backend.load_image(diagonal["image"]).shape[:2] == (50, 50)

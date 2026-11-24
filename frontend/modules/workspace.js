@@ -39,8 +39,12 @@ stOnRender(args => {
 
   const data = resp.data;
   if (data && data.image) {
+    const responseRequestId = resp.request_id;
     const img  = new Image();
     img.onload = () => {
+      if (responseRequestId !== _latestCropRequestId) return;
+      _latestCropRequestId = null;
+      cancelPendingProfileRequests();
       state.imgEl        = img;
       state.imgB64       = data.image;
       state.imgW         = img.naturalWidth;
@@ -48,6 +52,18 @@ stOnRender(args => {
       state.roiRect      = null;
       state.imageRotation = 0;
       state.view         = { zoom: 1, dx: 0, dy: 0 };
+      // The crop has a new coordinate system. The pre-crop annotations remain
+      // available through Undo, but cannot be used on this image as-is.
+      state.lines        = [];
+      state.spottingMarks = [];
+      state.lanes        = [];
+      state.laneWidth    = null;
+      state.fitOverrides = {};
+      state.activeLine   = null;
+      state.activeLane   = null;
+      state.activeMark   = null;
+      syncLaneWidthControl(state);
+      renderProfiles();
       render();
     };
     img.src = data.image;
@@ -95,6 +111,7 @@ export function saveState() {
 export function undo() {
   if (state.undoStack.length === 0) return;
 
+  _latestCropRequestId = null;
   cancelPendingProfileRequests();
   const activeLaneId = state.activeLane?.id;
   const snapshot = state.undoStack.pop();
@@ -145,6 +162,7 @@ export function undo() {
  */
 export function handleFile(file) {
   if (!file) return;
+  _latestCropRequestId = null;
   cancelPendingProfileRequests();
 
   const reader    = new FileReader();
@@ -172,6 +190,9 @@ export function handleFile(file) {
       state.laneWidth      = null;
       state.fitOverrides   = {};
       state.spottingMarks  = [];
+      state.roiRect        = null;
+      state.imageRotation  = 0;
+      state.view           = { zoom: 1, dx: 0, dy: 0 };
       state.activeLine     = null;
       state.activeLane     = null;
       state.activeMark     = null;
@@ -199,6 +220,7 @@ export function handleFile(file) {
  *   false ? hard reset (return to upload screen).
  */
 export function resetState(keepImage = true) {
+  _latestCropRequestId = null;
   cancelPendingProfileRequests();
   state.lines          = [];
   state.lanes          = [];

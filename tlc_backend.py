@@ -1006,11 +1006,57 @@ def _validated_lanes(value: Any, width: int, height: int) -> list[dict[str, floa
         lane_id = lane.get("id", index + 1)
         cx = _finite_number(lane.get("cx"), "lane centre x", 0, width)
         cy = _finite_number(lane.get("cy"), "lane centre y", 0, height)
-        lane_width = _finite_number(lane.get("w"), "lane width", 1, width)
-        lane_height = _finite_number(lane.get("h"), "lane height", 1, height)
         angle = _finite_number(lane.get("angle", 0), "lane angle", -2 * math.pi, 2 * math.pi)
+        cosine, sine = abs(math.cos(angle)), abs(math.sin(angle))
+        # A quarter-turn swaps the usable image width and height. The lane is
+        # stored in the original image's coordinates, while its dimensions
+        # describe the rotated view.
+        max_width = cosine * width + sine * height
+        max_height = sine * width + cosine * height
+        lane_width = _finite_number(lane.get("w"), "lane width", 1, max_width)
+        lane_height = _finite_number(lane.get("h"), "lane height", 1, max_height)
+        if lane_width * lane_height > MAX_IMAGE_PIXELS:
+            raise InputValidationError("Lane sampling area exceeds the supported limit.")
         lanes.append({"id": lane_id, "cx": cx, "cy": cy, "w": lane_width, "h": lane_height, "angle": angle})
     return lanes
+
+
+def _extract_lane_roi(image: np.ndarray, lane: dict[str, float | int]) -> np.ndarray:
+    """Sample a lane in its own axes, without clipping a rotated view to the source canvas."""
+    image_height, image_width = image.shape[:2]
+    cx, cy, width, height, angle = (
+        float(lane["cx"]), float(lane["cy"]), float(lane["w"]), float(lane["h"]), float(lane["angle"])
+    )
+    x1, x2 = int(cx - width / 2), int(cx + width / 2)
+    y1, y2 = int(cy - height / 2), int(cy + height / 2)
+
+    # Preserve the original, integer-sliced unrotated result exactly.
+    if abs(angle) < 1e-12:
+        return image[max(0, y1) : min(image_height, y2), max(0, x1) : min(image_width, x2)]
+
+    # The frontend draws the lane inside the image's rotation transform. Its
+    # local vertical axis therefore maps back to source pixels with R(angle).
+    # Sampling directly also handles 90/270-degree views whose vertical span
+    # is wider than the source image's unrotated height.
+    horizontal = np.arange(x1, x2, dtype=np.float32) - cx
+    vertical = np.arange(y1, y2, dtype=np.float32) - cy
+    if not horizontal.size or not vertical.size:
+        return image[:0, :0]
+    u, v = np.meshgrid(horizontal, vertical)
+    cosine, sine = math.cos(angle), math.sin(angle)
+    map_x = np.asarray(cx + cosine * u - sine * v, dtype=np.float32)
+    map_y = np.asarray(cy + sine * u + cosine * v, dtype=np.float32)
+    valid = (map_x >= 0) & (map_x < image_width) & (map_y >= 0) & (map_y < image_height)
+    if not valid.any():
+        return image[:0, :0]
+    valid_rows = np.flatnonzero(valid.any(axis=1))
+    valid_columns = np.flatnonzero(valid.any(axis=0))
+    row_slice = slice(int(valid_rows[0]), int(valid_rows[-1]) + 1)
+    column_slice = slice(int(valid_columns[0]), int(valid_columns[-1]) + 1)
+    return cv2.remap(
+        image, map_x[row_slice, column_slice], map_y[row_slice, column_slice],
+        cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=0,
+    )
 
 
 def _result_error(exc: Exception) -> dict[str, str]:
@@ -1021,7 +1067,7 @@ def _result_error(exc: Exception) -> dict[str, str]:
 
 
 def crop_image(data: dict[str, Any]) -> dict[str, Any]:
-    """Apply rotation and crop, returning a bounded JPEG data URL."""
+    """Crop in source-image coordinates, then bake in the displayed rotation."""
     try:
         if not isinstance(data, dict):
             raise InputValidationError("Crop data must be an object.")
@@ -1033,15 +1079,37 @@ def crop_image(data: dict[str, Any]) -> dict[str, Any]:
         crop_height = _finite_number(data.get("h"), "crop height", -height, 2 * height)
         angle = _finite_number(data.get("angle", 0), "crop angle", -2 * math.pi, 2 * math.pi)
 
-        if angle:
-            matrix = cv2.getRotationMatrix2D((width / 2, height / 2), np.degrees(-angle), 1.0)
-            image = cv2.warpAffine(image, matrix, (width, height))
-
         x1, x2 = sorted((int(round(x)), int(round(x + crop_width))))
         y1, y2 = sorted((int(round(y)), int(round(y + crop_height))))
         crop = image[max(0, y1) : min(height, y2), max(0, x1) : min(width, x2)]
         if crop.size == 0:
             raise InputValidationError("The crop region is outside the image.")
+
+        # The frontend ROI is stored in the unrotated image's coordinates.
+        # Rotate the selected pixels only after cropping so a quarter-turn
+        # swaps dimensions instead of clipping them to the source canvas.
+        turns = round(angle / (math.pi / 2))
+        if math.isclose(angle, turns * math.pi / 2, abs_tol=1e-8):
+            turn = turns % 4
+            if turn == 1:
+                crop = cv2.rotate(crop, cv2.ROTATE_90_CLOCKWISE)
+            elif turn == 2:
+                crop = cv2.rotate(crop, cv2.ROTATE_180)
+            elif turn == 3:
+                crop = cv2.rotate(crop, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        elif angle:
+            crop_height_px, crop_width_px = crop.shape[:2]
+            cosine, sine = abs(math.cos(angle)), abs(math.sin(angle))
+            rotated_width = int(math.ceil(crop_width_px * cosine + crop_height_px * sine))
+            rotated_height = int(math.ceil(crop_width_px * sine + crop_height_px * cosine))
+            if (rotated_width > MAX_IMAGE_DIMENSION or rotated_height > MAX_IMAGE_DIMENSION
+                    or rotated_width * rotated_height > MAX_IMAGE_PIXELS):
+                raise InputValidationError("The rotated crop exceeds the supported image dimensions.")
+            matrix = cv2.getRotationMatrix2D((crop_width_px / 2, crop_height_px / 2),
+                                             -math.degrees(angle), 1.0)
+            matrix[0, 2] += (rotated_width - crop_width_px) / 2
+            matrix[1, 2] += (rotated_height - crop_height_px) / 2
+            crop = cv2.warpAffine(crop, matrix, (rotated_width, rotated_height))
         ok, buffer = cv2.imencode(".jpg", crop, [cv2.IMWRITE_JPEG_QUALITY, 90])
         if not ok:
             raise RuntimeError("Could not encode crop.")
@@ -1088,14 +1156,7 @@ def generate_profiles(data: dict[str, Any]) -> dict[str, Any]:
 
         results = []
         for lane in lanes:
-            cx, cy, lane_width, lane_height, angle = (
-                float(lane["cx"]), float(lane["cy"]), float(lane["w"]), float(lane["h"]), float(lane["angle"])
-            )
-            rotation = cv2.getRotationMatrix2D((cx, cy), np.degrees(-angle), 1.0)
-            straight = cv2.warpAffine(image, rotation, (image_width, image_height))
-            y1, y2 = max(0, int(cy - lane_height / 2)), min(image_height, int(cy + lane_height / 2))
-            x1, x2 = max(0, int(cx - lane_width / 2)), min(image_width, int(cx + lane_width / 2))
-            roi = straight[y1:y2, x1:x2]
+            roi = _extract_lane_roi(image, lane)
             if roi.size == 0:
                 results.append({"id": lane["id"], "profile": [], "profile_display": [], "profile_analysis": [], "peaks": [], "fit_groups": []})
                 continue

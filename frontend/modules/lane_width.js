@@ -3,8 +3,8 @@
 export const MIN_LANE_WIDTH = 2;
 const WIDTH_STEPS_PER_PIXEL = 10;
 
-function frame(lane, reverseAngle = false) {
-  const angle = (reverseAngle ? -1 : 1) * Number(lane.angle || 0);
+function frame(lane) {
+  const angle = Number(lane.angle || 0);
   const cosine = Math.cos(angle);
   const sine = Math.sin(angle);
   return {
@@ -34,28 +34,29 @@ function rectanglesOverlap(first, second, width) {
   return true;
 }
 
-/** Return the maximum width before lane overlap or horizontal ROI clipping. */
-export function maxCommonLaneWidth(lanes, imageWidth) {
-  if (!Array.isArray(lanes) || !lanes.length || !Number.isFinite(imageWidth) || imageWidth <= 0) return 0;
+/** Return the maximum width before lane overlap or source-image edge clipping. */
+export function maxCommonLaneWidth(lanes, imageWidth, imageHeight = imageWidth) {
+  if (!Array.isArray(lanes) || !lanes.length || !Number.isFinite(imageWidth) || imageWidth <= 0
+    || !Number.isFinite(imageHeight) || imageHeight <= 0) return 0;
   if (lanes.some(lane => ![lane.cx, lane.cy, lane.h, lane.angle || 0].every(Number.isFinite) || lane.h <= 0)) return 0;
 
   const visible = lanes.map(lane => frame(lane));
-  // The current backend's rotated sampling footprint has the opposite angle
-  // from the drawn box. Keep both footprints separate without changing the
-  // established profile calculation in this lane-width update.
-  const sampled = lanes.map(lane => frame(lane, true));
   const overlaps = width => {
     for (let index = 0; index < lanes.length; index += 1) {
       for (let other = index + 1; other < lanes.length; other += 1) {
-        if (rectanglesOverlap(visible[index], visible[other], width)
-          || rectanglesOverlap(sampled[index], sampled[other], width)) return true;
+        if (rectanglesOverlap(visible[index], visible[other], width)) return true;
       }
     }
     return false;
   };
 
-  const edgeLimit = Math.min(imageWidth, ...lanes.map(lane =>
-    2 * Math.min(lane.cx, imageWidth - lane.cx)));
+  const edgeLimit = Math.min(...visible.map(lane => {
+    const xMargin = Math.min(lane.cx, imageWidth - lane.cx);
+    const yMargin = Math.min(lane.cy, imageHeight - lane.cy);
+    const xLimit = Math.abs(lane.across.x) > 1e-9 ? 2 * xMargin / Math.abs(lane.across.x) : Infinity;
+    const yLimit = Math.abs(lane.across.y) > 1e-9 ? 2 * yMargin / Math.abs(lane.across.y) : Infinity;
+    return Math.min(Math.hypot(imageWidth, imageHeight), xLimit, yLimit);
+  }));
   let safe = 0;
   let unsafe = Math.max(0, Math.floor(edgeLimit * WIDTH_STEPS_PER_PIXEL));
   while (safe < unsafe) {
@@ -68,7 +69,7 @@ export function maxCommonLaneWidth(lanes, imageWidth) {
 
 /** Apply one width to every lane, respecting the current overlap limit. */
 export function applyCommonLaneWidth(state, requestedWidth) {
-  const maximum = maxCommonLaneWidth(state.lanes, state.imgW);
+  const maximum = maxCommonLaneWidth(state.lanes, state.imgW, state.imgH ?? state.imgW);
   if (maximum < MIN_LANE_WIDTH) return false;
   const requested = Number(requestedWidth);
   const fallback = Number(state.laneWidth ?? state.lanes[0].w);
@@ -85,7 +86,7 @@ export function syncLaneWidthControl(state, doc = document) {
   if (!slider) return;
   const value = doc.getElementById('lane-width-val');
   const limit = doc.getElementById('lane-width-max');
-  const maximum = maxCommonLaneWidth(state.lanes, state.imgW);
+  const maximum = maxCommonLaneWidth(state.lanes, state.imgW, state.imgH ?? state.imgW);
   const usable = maximum >= MIN_LANE_WIDTH;
   slider.disabled = !usable;
   slider.min = String(MIN_LANE_WIDTH);

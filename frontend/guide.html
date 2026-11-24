@@ -110,7 +110,7 @@
       <h2>Start-to-finish workflow</h2>
       <div class="steps">
         <div class="step"><b>Load the plate image</b>Drop an image anywhere on the upload screen, or click <strong>Browse</strong> to select it. The longest image dimension is reduced to 1000 px for analysis.</div>
-        <div class="step"><b>Prepare the plate</b>Crop away unused background and rotate the plate so the sample lanes run vertically. Do this before adding lines and marks.</div>
+        <div class="step"><b>Prepare the plate</b>Camera orientation metadata is applied when the photo loads. Check that sample lanes run vertically and the origin is below the front; rotate only if needed. Crop away unused background before adding lines and marks.</div>
         <div class="step"><b>Draw the boundaries</b>Select <strong>Boundary Lines</strong> and drag one line across the origin and another across the solvent front. The origin must be below the front, and the lines must be vertically separated.</div>
         <div class="step"><b>Add sample positions</b>Select <strong>Spotting Marks</strong> and click once at each application position along the origin. Marks placed near the origin snap onto it.</div>
         <div class="step"><b>Find and inspect lanes</b>Click <strong>Find Lanes</strong>. Blue lane boxes appear and the first lane opens in the analysis panel. Use <strong>Common lane width</strong> to give every lane the same sampling width, up to the displayed safe limit. Profiles and peaks recalculate when you release the slider.</div>
@@ -122,7 +122,7 @@
     <section id="canvas">
       <h2>Left panel and canvas tools</h2>
       <div class="tool-grid">
-        <div class="tool"><h3>Crop ROI</h3><p>Drag a rectangle around the region to keep. The crop is applied when the mouse is released and rotation is baked into the cropped image.</p></div>
+        <div class="tool"><h3>Crop ROI</h3><p>Drag a rectangle around the region to keep. The crop is applied when the mouse is released and rotation is baked into the cropped image. Cropping clears existing lines, marks and lanes; Undo restores them.</p></div>
         <div class="tool"><h3>Pan &amp; Zoom</h3><p>Drag empty canvas space to pan. Use the mouse wheel to zoom around the pointer position.</p></div>
         <div class="tool"><h3>Rotate</h3><p>Drag horizontally for fine rotation. Double-click the image to rotate exactly 90° clockwise.</p></div>
         <div class="tool"><h3>Select &amp; Edit</h3><p>Click and drag a line, spotting mark or lane to move it. Select an item and press <kbd>Delete</kbd> or <kbd>Backspace</kbd> to remove it.</p></div>
@@ -137,7 +137,7 @@
         <li><strong>Invert</strong> reverses image colours and updates the analysed profiles.</li>
         <li>Changing projection, RGB window or Invert recalculates profiles and runs automatic peak detection again. Manual peak edits are replaced, so finish your filter choice before editing peaks.</li>
         <li><strong>Polarity Mode</strong> selects Default, Dark Spots or Bright Spots to match the plate appearance.</li>
-        <li><strong>Common lane width</strong> sets the shared sampling-strip width in processed-image pixels. Its maximum changes with lane positions to prevent overlap or horizontal crop clipping. Adjusting it reruns automatic peak detection and replaces manual peak edits. As with the existing analysis, rotated regions near an image edge may include padded pixels.</li>
+        <li><strong>Common lane width</strong> sets the shared sampling-strip width in processed-image pixels. Its maximum changes with lane positions to prevent overlap or image-edge clipping. Adjusting it reruns automatic peak detection and replaces manual peak edits. Rotated regions near an image edge may still include padded pixels at their ends.</li>
         <li><strong>Sens.</strong> controls how readily weaker peaks are detected; <strong>Res.</strong> controls minimum peak separation; <strong>Width %</strong> controls the threshold used to define each peak's visible and analytical integration boundaries.</li>
         <li><strong>Shoulder sensitivity</strong> starts at <strong>Off</strong>, which uses ordinary peak detection. Raise it to look for weaker shoulders hidden under larger peaks. Releasing the slider reruns peak detection and fitting; a higher setting can produce more candidates, so inspect the curve and fit diagnostics before accepting a split.</li>
         <li><strong>Default asymmetry</strong> appears when Shoulder sensitivity is above Off and is checked initially. Checked uses the original shoulder splitting calculation. Uncheck it to show <strong>Maximum peak asymmetry (R)</strong>, which limits the ratio of the wider to the narrower side of each fitted peak. R ranges from 1.0 (symmetric) to 5.0 (fivefold side-width difference) and starts at 1.0. Changing either control refits the shoulders and their areas. With an R limit, a split is retained only if its squared error is no more than 5% above the best unrestricted fit.</li>
